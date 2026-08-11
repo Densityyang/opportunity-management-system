@@ -1,0 +1,1055 @@
+openapi: 3.1.0
+info:
+  title: 商机随手报 API
+  version: 1.0.0
+  description: 固定问卷、区县承接、分侧处理、双节点审核与市公司成功商机库。
+servers:
+  - url: /api/v1
+security:
+  - cookieAuth: []
+    roleGrant: []
+paths:
+  /health:
+    get:
+      security: []
+      operationId: health
+      responses:
+        "200": { description: healthy }
+  /auth/login:
+    post:
+      security: []
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "201":
+          description: logged in
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/CurrentUser" } },
+            }
+        default: { $ref: "#/components/responses/Problem" }
+  /auth/me:
+    get:
+      security: [{ cookieAuth: [] }]
+      operationId: currentUser
+      responses:
+        "200":
+          {
+            description: current user,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: "#/components/schemas/CurrentUser" } },
+              },
+          }
+        default: { $ref: "#/components/responses/Problem" }
+  /auth/change-password:
+    post:
+      security: [{ cookieAuth: [] }]
+      operationId: changePassword
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: "#/components/schemas/ChangePasswordRequest" },
+                },
+            },
+        }
+      responses:
+        "201": { description: changed }
+        default: { $ref: "#/components/responses/Problem" }
+  /auth/reauth:
+    post:
+      operationId: reauthenticateForExport
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/ReauthRequest" } },
+            },
+        }
+      responses:
+        "201":
+          {
+            description: one-time token,
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      {
+                        type: object,
+                        additionalProperties: false,
+                        required: [token, expiresAt],
+                        properties:
+                          {
+                            token: { type: string },
+                            expiresAt: { type: string, format: date-time },
+                          },
+                      },
+                  },
+              },
+          }
+        default: { $ref: "#/components/responses/Problem" }
+  /auth/logout:
+    post:
+      security: [{ cookieAuth: [] }]
+      operationId: logout
+      responses:
+        "201": { description: logged out }
+  /reference/districts:
+    get:
+      operationId: listEnabledDistricts
+      responses:
+        "200":
+          {
+            description: districts,
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      {
+                        type: array,
+                        items: { $ref: "#/components/schemas/District" },
+                      },
+                  },
+              },
+          }
+  /reference/handlers:
+    get:
+      operationId: listAssignableHandlers
+      parameters:
+        - {
+            in: query,
+            name: districtId,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            in: query,
+            name: customerType,
+            required: true,
+            schema: { $ref: "#/components/schemas/CustomerType" },
+          }
+      responses:
+        "200": { description: handlers }
+        default: { $ref: "#/components/responses/Problem" }
+  /opportunities:
+    post:
+      operationId: submitOpportunity
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: "#/components/schemas/SubmitOpportunityRequest" },
+                },
+            },
+        }
+      responses:
+        "201":
+          {
+            description: submitted,
+            content:
+              {
+                application/json:
+                  {
+                    schema: { $ref: "#/components/schemas/OpportunityDetail" },
+                  },
+              },
+          }
+        default: { $ref: "#/components/responses/Problem" }
+    get:
+      operationId: listOpportunities
+      parameters:
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PageSize" }
+        - {
+            in: query,
+            name: state,
+            schema: { $ref: "#/components/schemas/OpportunityState" },
+          }
+        - {
+            in: query,
+            name: districtId,
+            schema: { type: string, format: uuid },
+          }
+      responses:
+        "200": { description: role-scoped list }
+        default: { $ref: "#/components/responses/Problem" }
+  /opportunities/{opportunityId}:
+    parameters: [{ $ref: "#/components/parameters/OpportunityId" }]
+    get:
+      operationId: getOpportunity
+      responses:
+        "200":
+          {
+            description: detail,
+            content:
+              {
+                application/json:
+                  {
+                    schema: { $ref: "#/components/schemas/OpportunityDetail" },
+                  },
+              },
+          }
+        default: { $ref: "#/components/responses/Problem" }
+  /opportunities/{opportunityId}/timeline:
+    parameters: [{ $ref: "#/components/parameters/OpportunityId" }]
+    get:
+      operationId: getTimeline
+      responses:
+        "200": { description: append-only workflow events }
+        default: { $ref: "#/components/responses/Problem" }
+  /opportunities/{opportunityId}/resubmit:
+    parameters: [{ $ref: "#/components/parameters/OpportunityId" }]
+    put:
+      operationId: resubmitOpportunity
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: "#/components/schemas/ResubmitOpportunityRequest" },
+                },
+            },
+        }
+      responses:
+        "200": { description: resubmitted }
+        default: { $ref: "#/components/responses/Problem" }
+  /opportunities/{opportunityId}/audio:
+    parameters: [{ $ref: "#/components/parameters/OpportunityId" }]
+    post:
+      operationId: uploadAudio
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [audio]
+              properties: { audio: { type: string, format: binary } }
+      responses:
+        "201": { description: encrypted audio stored }
+        default: { $ref: "#/components/responses/Problem" }
+    get:
+      operationId: playAudio
+      responses:
+        "200":
+          {
+            description: decrypted authorized stream,
+            content:
+              {
+                audio/webm: { schema: { type: string, format: binary } },
+                audio/mp4: { schema: { type: string, format: binary } },
+              },
+          }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteAudioBeforeReview
+      responses:
+        "200": { description: reporter removed audio while editable }
+        default: { $ref: "#/components/responses/Problem" }
+  /opportunities/{opportunityId}/reviews/first/approve:
+    post:
+      operationId: approveFirstReview
+      parameters:
+        [
+          { $ref: "#/components/parameters/OpportunityId" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+        ]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/VersionRequest" } },
+            },
+        }
+      responses:
+        {
+          "201": { $ref: "#/components/responses/Transitioned" },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /opportunities/{opportunityId}/reviews/first/return:
+    post:
+      operationId: returnFirstReview
+      parameters:
+        [
+          { $ref: "#/components/parameters/OpportunityId" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+        ]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/ReturnRequest" } },
+            },
+        }
+      responses:
+        {
+          "201": { $ref: "#/components/responses/Transitioned" },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /opportunities/{opportunityId}/assignments/reassign:
+    post:
+      operationId: reassignOpportunity
+      parameters:
+        [
+          { $ref: "#/components/parameters/OpportunityId" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+        ]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/ReassignRequest" } },
+            },
+        }
+      responses:
+        {
+          "201": { $ref: "#/components/responses/Transitioned" },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /opportunities/{opportunityId}/pause:
+    post:
+      operationId: pauseOpportunity
+      parameters:
+        [
+          { $ref: "#/components/parameters/OpportunityId" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+        ]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/PauseRequest" } },
+            },
+        }
+      responses:
+        {
+          "201": { $ref: "#/components/responses/Transitioned" },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /opportunities/{opportunityId}/resume:
+    post:
+      operationId: resumeOpportunity
+      parameters:
+        [
+          { $ref: "#/components/parameters/OpportunityId" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+        ]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/VersionRequest" } },
+            },
+        }
+      responses:
+        {
+          "201": { $ref: "#/components/responses/Transitioned" },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /opportunities/{opportunityId}/results/success:
+    post:
+      operationId: submitSuccessResult
+      description: 成功结果仅允许成功商机名称，不接受金额、产品、日期或其他扩展字段。
+      parameters:
+        [
+          { $ref: "#/components/parameters/OpportunityId" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+        ]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema: { $ref: "#/components/schemas/SuccessResultRequest" },
+                },
+            },
+        }
+      responses:
+        {
+          "201": { $ref: "#/components/responses/Transitioned" },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /opportunities/{opportunityId}/results/failure:
+    post:
+      operationId: submitFailureResult
+      parameters:
+        [
+          { $ref: "#/components/parameters/OpportunityId" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+        ]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema: { $ref: "#/components/schemas/FailureResultRequest" },
+                },
+            },
+        }
+      responses:
+        {
+          "201": { $ref: "#/components/responses/Transitioned" },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /opportunities/{opportunityId}/reviews/final/approve:
+    post:
+      operationId: approveFinalReview
+      parameters:
+        [
+          { $ref: "#/components/parameters/OpportunityId" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+        ]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/VersionRequest" } },
+            },
+        }
+      responses:
+        {
+          "201": { $ref: "#/components/responses/Transitioned" },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /opportunities/{opportunityId}/reviews/final/return:
+    post:
+      operationId: returnFinalReview
+      parameters:
+        [
+          { $ref: "#/components/parameters/OpportunityId" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+        ]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/ReturnRequest" } },
+            },
+        }
+      responses:
+        {
+          "201": { $ref: "#/components/responses/Transitioned" },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /notifications:
+    get:
+      operationId: listNotifications
+      responses:
+        {
+          "200": { description: current role and user notifications },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /notifications/read-all:
+    patch:
+      operationId: markAllNotificationsRead
+      responses:
+        {
+          "200": { description: marked },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /municipal/successes:
+    get:
+      operationId: listMunicipalSuccesses
+      parameters:
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PageSize" }
+        - {
+            in: query,
+            name: districtId,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            in: query,
+            name: customerType,
+            schema: { $ref: "#/components/schemas/CustomerType" },
+          }
+        - {
+            in: query,
+            name: attitude,
+            schema: { $ref: "#/components/schemas/CustomerAttitude" },
+          }
+        - {
+            in: query,
+            name: successOpportunityName,
+            schema: { type: string, minLength: 2, maxLength: 100 },
+          }
+        - {
+            in: query,
+            name: customerContact,
+            schema: { type: string, maxLength: 200 },
+          }
+        - {
+            in: query,
+            name: closedFrom,
+            schema: { type: string, format: date-time },
+          }
+        - {
+            in: query,
+            name: closedTo,
+            schema: { type: string, format: date-time },
+          }
+      responses:
+        {
+          "200": { description: successful opportunities },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /municipal/successes/{opportunityId}:
+    get:
+      operationId: getMunicipalSuccess
+      parameters: [{ $ref: "#/components/parameters/OpportunityId" }]
+      responses:
+        {
+          "200": { description: read-only detail and timeline },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /municipal/exports/successes:
+    post:
+      operationId: exportSuccesses
+      parameters: [{ $ref: "#/components/parameters/ReauthToken" }]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema: { $ref: "#/components/schemas/SuccessExportFilter" },
+                },
+            },
+        }
+      responses:
+        {
+          "200": { $ref: "#/components/responses/Xlsx" },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /municipal/exports/workflow:
+    post:
+      operationId: exportWorkflowNodes
+      parameters: [{ $ref: "#/components/parameters/ReauthToken" }]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema: { $ref: "#/components/schemas/WorkflowExportFilter" },
+                },
+            },
+        }
+      responses:
+        {
+          "200": { $ref: "#/components/responses/Xlsx" },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /admin/users:
+    get:
+      operationId: listUsers
+      responses:
+        {
+          "200": { description: accounts and grants },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+    post:
+      operationId: createUser
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/CreateUserRequest" } },
+            },
+        }
+      responses:
+        {
+          "201": { description: created },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /admin/users/{userId}/grants:
+    post:
+      operationId: createRoleGrant
+      parameters:
+        [
+          {
+            in: path,
+            name: userId,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: "#/components/schemas/CreateRoleGrantRequest" },
+                },
+            },
+        }
+      responses:
+        {
+          "201": { description: created },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /admin/districts/{districtId}/routing:
+    post:
+      operationId: upsertDistrictRouting
+      parameters:
+        [
+          {
+            in: path,
+            name: districtId,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/RoutingRequest" } },
+            },
+        }
+      responses:
+        {
+          "201": { description: saved },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /admin/retention/{candidateId}/complete:
+    post:
+      operationId: completeRetention
+      parameters:
+        [
+          {
+            in: path,
+            name: candidateId,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/RetentionRequest" } },
+            },
+        }
+      responses:
+        {
+          "201": { description: completed },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+components:
+  securitySchemes:
+    cookieAuth: { type: apiKey, in: cookie, name: oms_session }
+    roleGrant: { type: apiKey, in: header, name: X-Role-Grant-Id }
+  parameters:
+    OpportunityId:
+      {
+        in: path,
+        name: opportunityId,
+        required: true,
+        schema: { type: string, format: uuid },
+      }
+    IdempotencyKey:
+      {
+        in: header,
+        name: Idempotency-Key,
+        required: true,
+        schema: { type: string, minLength: 1, maxLength: 160 },
+      }
+    ReauthToken:
+      {
+        in: header,
+        name: X-Reauth-Token,
+        required: true,
+        schema: { type: string },
+      }
+    Page:
+      {
+        in: query,
+        name: page,
+        schema: { type: integer, minimum: 1, default: 1 },
+      }
+    PageSize:
+      {
+        in: query,
+        name: pageSize,
+        schema: { type: integer, minimum: 1, maximum: 100, default: 20 },
+      }
+  responses:
+    Problem:
+      description: problem details
+      content:
+        {
+          application/problem+json:
+            { schema: { $ref: "#/components/schemas/ProblemDetails" } },
+        }
+    Transitioned:
+      description: state transitioned
+      content:
+        {
+          application/json:
+            { schema: { $ref: "#/components/schemas/TransitionResult" } },
+        }
+    Xlsx:
+      description: streamed XLSX without server-side retained copy
+      content:
+        {
+          application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+            { schema: { type: string, format: binary } },
+        }
+  schemas:
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [phone, password]
+      properties:
+        {
+          phone: { type: string, pattern: '^1[3-9]\d{9}$' },
+          password: { type: string, minLength: 8, maxLength: 128 },
+        }
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword]
+      properties:
+        {
+          currentPassword: { type: string, minLength: 8 },
+          newPassword: { type: string, minLength: 12, maxLength: 128 },
+        }
+    ReauthRequest:
+      type: object
+      additionalProperties: false
+      required: [password]
+      properties: { password: { type: string, minLength: 8 } }
+    RoleCode:
+      {
+        type: string,
+        enum:
+          [
+            FIELD_REPORTER,
+            DISTRICT_MANAGER,
+            PERSONAL_HANDLER,
+            ORGANIZATION_HANDLER,
+            MUNICIPAL,
+            SYSTEM_ADMIN,
+          ],
+      }
+    CustomerType: { type: string, enum: [PERSONAL, ORGANIZATION] }
+    CustomerAttitude:
+      { type: string, enum: [URGENT, IMPORTANT, GENERAL, POTENTIAL] }
+    OpportunityState:
+      {
+        type: string,
+        enum:
+          [
+            PENDING_FIRST_REVIEW,
+            RETURNED_TO_REPORTER,
+            HANDLING,
+            PAUSED,
+            PENDING_FINAL_REVIEW,
+            RETURNED_TO_HANDLER,
+            CLOSED_SUCCESS,
+            CLOSED_FAILURE,
+          ],
+      }
+    District:
+      type: object
+      additionalProperties: false
+      required: [id, code, name, enabled]
+      properties:
+        {
+          id: { type: string, format: uuid },
+          code: { type: string },
+          name: { type: string },
+          enabled: { type: boolean },
+        }
+    RoleGrant:
+      type: object
+      additionalProperties: false
+      required: [id, role, districtId, districtName]
+      properties:
+        {
+          id: { type: string, format: uuid },
+          role: { $ref: "#/components/schemas/RoleCode" },
+          districtId: { type: [string, "null"], format: uuid },
+          districtName: { type: [string, "null"] },
+        }
+    CurrentUser:
+      type: object
+      additionalProperties: false
+      required: [id, phone, displayName, mustChangePassword, grants]
+      properties:
+        {
+          id: { type: string, format: uuid },
+          phone: { type: string },
+          displayName: { type: string },
+          mustChangePassword: { type: boolean },
+          grants:
+            { type: array, items: { $ref: "#/components/schemas/RoleGrant" } },
+        }
+    SubmitOpportunityRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          customerType,
+          districtId,
+          customerContact,
+          specificNeed,
+          attitude,
+          consentConfirmed,
+        ]
+      properties:
+        customerType: { $ref: "#/components/schemas/CustomerType" }
+        districtId: { type: string, format: uuid }
+        customerContact: { type: string, minLength: 1, maxLength: 200 }
+        specificNeed: { type: string, minLength: 1, maxLength: 2000 }
+        attitude: { $ref: "#/components/schemas/CustomerAttitude" }
+        oneSentenceDescription: { type: string, maxLength: 50 }
+        consentConfirmed: { type: boolean, const: true }
+    ResubmitOpportunityRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          expectedVersion,
+          customerType,
+          districtId,
+          customerContact,
+          specificNeed,
+          attitude,
+          consentConfirmed,
+        ]
+      properties:
+        expectedVersion: { type: integer, minimum: 1 }
+        customerType: { $ref: "#/components/schemas/CustomerType" }
+        districtId: { type: string, format: uuid }
+        customerContact: { type: string, minLength: 1, maxLength: 200 }
+        specificNeed: { type: string, minLength: 1, maxLength: 2000 }
+        attitude: { $ref: "#/components/schemas/CustomerAttitude" }
+        oneSentenceDescription: { type: string, maxLength: 50 }
+        consentConfirmed: { type: boolean, const: true }
+    VersionRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion]
+      properties: { expectedVersion: { type: integer, minimum: 1 } }
+    ReturnRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, reason]
+      properties:
+        {
+          expectedVersion: { type: integer, minimum: 1 },
+          reason: { type: string, minLength: 1, maxLength: 500 },
+        }
+    ReassignRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, handlerGrantId, reason]
+      properties:
+        {
+          expectedVersion: { type: integer, minimum: 1 },
+          handlerGrantId: { type: string, format: uuid },
+          reason: { type: string, minLength: 1, maxLength: 500 },
+        }
+    PauseRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, nextProcessingAt]
+      properties:
+        {
+          expectedVersion: { type: integer, minimum: 1 },
+          nextProcessingAt: { type: string, format: date-time },
+        }
+    SuccessResultRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, successOpportunityName]
+      properties:
+        {
+          expectedVersion: { type: integer, minimum: 1 },
+          successOpportunityName:
+            {
+              type: string,
+              minLength: 1,
+              maxLength: 200,
+              description: 请填写公司DICT系统项目名称,
+            },
+        }
+    FailureResultRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, failureReason]
+      properties:
+        {
+          expectedVersion: { type: integer, minimum: 1 },
+          failureReason: { type: string, minLength: 1, maxLength: 500 },
+        }
+    TransitionResult:
+      type: object
+      additionalProperties: false
+      required: [id, state, version]
+      properties:
+        {
+          id: { type: string, format: uuid },
+          state: { $ref: "#/components/schemas/OpportunityState" },
+          version: { type: integer },
+        }
+    OpportunityDetail:
+      type: object
+      description: 字段以服务端记录级授权裁剪；市公司仅成功终态可获得。
+      required:
+        [
+          id,
+          serialNumber,
+          state,
+          version,
+          reporterPhone,
+          customerType,
+          district,
+          customerContact,
+          specificNeed,
+          attitude,
+          consentAt,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        serialNumber: { type: string }
+        state: { $ref: "#/components/schemas/OpportunityState" }
+        version: { type: integer }
+        reporterPhone: { type: string }
+        customerType: { $ref: "#/components/schemas/CustomerType" }
+        district: { $ref: "#/components/schemas/District" }
+        customerContact: { type: string }
+        specificNeed: { type: string }
+        attitude: { $ref: "#/components/schemas/CustomerAttitude" }
+        oneSentenceDescription: { type: [string, "null"] }
+        successOpportunityName: { type: [string, "null"] }
+        failureReason: { type: [string, "null"] }
+        consentAt: { type: string, format: date-time }
+    SuccessExportFilter:
+      type: object
+      additionalProperties: false
+      properties:
+        districtId: { type: string, format: uuid }
+        customerType: { $ref: "#/components/schemas/CustomerType" }
+        attitude: { $ref: "#/components/schemas/CustomerAttitude" }
+        successOpportunityName: { type: string, minLength: 2, maxLength: 100 }
+        customerContact: { type: string, maxLength: 200 }
+        closedFrom: { type: string, format: date-time }
+        closedTo: { type: string, format: date-time }
+    WorkflowExportFilter:
+      type: object
+      additionalProperties: false
+      properties:
+        {
+          districtId: { type: string, format: uuid },
+          state: { $ref: "#/components/schemas/OpportunityState" },
+          submittedFrom: { type: string, format: date-time },
+          submittedTo: { type: string, format: date-time },
+        }
+    CreateUserRequest:
+      type: object
+      additionalProperties: false
+      required: [phone, displayName, initialPassword]
+      properties:
+        {
+          phone: { type: string, pattern: '^1[3-9]\d{9}$' },
+          displayName: { type: string, minLength: 1, maxLength: 80 },
+          initialPassword: { type: string, minLength: 12, maxLength: 128 },
+        }
+    CreateRoleGrantRequest:
+      type: object
+      additionalProperties: false
+      required: [role]
+      properties:
+        {
+          role: { $ref: "#/components/schemas/RoleCode" },
+          districtId: { type: string, format: uuid },
+        }
+    RoutingRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [managerGrantId, personalHandlerGrantId, organizationHandlerGrantId]
+      properties:
+        {
+          managerGrantId: { type: string, format: uuid },
+          personalHandlerGrantId: { type: string, format: uuid },
+          organizationHandlerGrantId: { type: string, format: uuid },
+        }
+    RetentionRequest:
+      type: object
+      additionalProperties: false
+      required: [action, confirmationSerialNumber]
+      properties:
+        {
+          action: { type: string, enum: [ANONYMIZE, DELETE] },
+          confirmationSerialNumber:
+            { type: string, minLength: 1, maxLength: 32 },
+        }
+    ProblemDetails:
+      type: object
+      required: [type, title, status, detail, errorCode]
+      properties:
+        {
+          type: { type: string, format: uri },
+          title: { type: string },
+          status: { type: integer },
+          detail: { type: string },
+          instance: { type: string },
+          errorCode: { type: string },
+          traceId: { type: [string, "null"] },
+        }

@@ -1,0 +1,16 @@
+packages:
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  "@prisma/engines": true
+  "@scarf/scarf": true
+  argon2: true
+  esbuild: true
+  prisma: true
+
+onlyBuiltDependencies:
+  - argon2
+  - esbuild
+  - prisma
+  - "@prisma/engines"
