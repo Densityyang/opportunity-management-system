@@ -1,6 +1,11 @@
+import { SPECIFIC_NEED_OPTIONS } from "@oms/contracts";
 import { Transform, Type } from "class-transformer";
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  ArrayUnique,
   IsBoolean,
+  IsArray,
   IsEnum,
   IsISO8601,
   IsInt,
@@ -10,7 +15,31 @@ import {
   Length,
   Max,
   Min,
+  Validate,
+  ValidatorConstraint,
+  type ValidationArguments,
+  type ValidatorConstraintInterface,
 } from "class-validator";
+
+export { SPECIFIC_NEED_OPTIONS };
+
+@ValidatorConstraint({ name: "specificNeedOption", async: false })
+class SpecificNeedOptionConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    return (
+      Array.isArray(value) &&
+      value.every(
+        (item) =>
+          typeof item === "string" &&
+          (SPECIFIC_NEED_OPTIONS as readonly string[]).includes(item),
+      )
+    );
+  }
+
+  defaultMessage(_args: ValidationArguments): string {
+    return "具体需求选项无效";
+  }
+}
 import {
   CustomerAttitude,
   CustomerType,
@@ -28,9 +57,13 @@ export class SubmitOpportunityDto {
   @Length(1, 200)
   customerContact!: string;
 
-  @IsString()
-  @Length(1, 2000)
-  specificNeed!: string;
+  @IsArray()
+  @ArrayMinSize(1, { message: "至少选择一项具体需求" })
+  @ArrayMaxSize(2, { message: "具体需求最多选择两项" })
+  @ArrayUnique({ message: "具体需求不能重复选择" })
+  @IsString({ each: true })
+  @Validate(SpecificNeedOptionConstraint)
+  specificNeeds!: string[];
 
   @IsEnum(CustomerAttitude)
   attitude!: CustomerAttitude;
@@ -55,6 +88,11 @@ export class ExpectedVersionDto {
   @IsInt()
   @Min(1)
   expectedVersion!: number;
+}
+
+export class FirstApproveDto extends ExpectedVersionDto {
+  @IsUUID()
+  handlerGrantId!: string;
 }
 
 export class ReturnDto extends ExpectedVersionDto {

@@ -5,7 +5,11 @@ import type {
   DistrictView,
   OpportunityDetail,
 } from "@oms/contracts";
-import { CONSENT_TEXT, ORGANIZATION_NOTE } from "@oms/contracts";
+import {
+  CONSENT_TEXT,
+  ORGANIZATION_NOTE,
+  SPECIFIC_NEED_OPTIONS,
+} from "@oms/contracts";
 import {
   App,
   Button,
@@ -28,7 +32,7 @@ interface FormValues {
   customerType: CustomerType;
   districtId: string;
   customerContact: string;
-  specificNeed: string;
+  specificNeeds: string[];
   attitude: CustomerAttitude;
   oneSentenceDescription?: string;
   consentConfirmed: boolean;
@@ -60,7 +64,7 @@ export function ReportPage() {
             customerType: item.customerType,
             districtId: item.district.id,
             customerContact: item.customerContact,
-            specificNeed: item.specificNeed,
+            specificNeeds: item.specificNeeds,
             attitude: item.attitude,
             oneSentenceDescription: item.oneSentenceDescription ?? undefined,
             consentConfirmed: false,
@@ -177,11 +181,28 @@ export function ReportPage() {
           <Input maxLength={200} showCount />
         </Form.Item>
         <Form.Item
-          name="specificNeed"
+          name="specificNeeds"
           label="具体需求"
-          rules={[{ required: true, whitespace: true }, { max: 2000 }]}
+          extra="不需要判断具体产品，选择最接近客户实际情况的选项即可，最多选择两项。"
+          rules={[
+            {
+              validator: (_, value: string[] | undefined) => {
+                if (!value?.length)
+                  return Promise.reject(new Error("至少选择一项具体需求"));
+                if (value.length > 2)
+                  return Promise.reject(new Error("最多选择两项"));
+                return Promise.resolve();
+              },
+            },
+          ]}
         >
-          <Input.TextArea rows={6} maxLength={2000} showCount />
+          <Checkbox.Group
+            options={SPECIFIC_NEED_OPTIONS.map((value) => ({
+              label: value,
+              value,
+            }))}
+            style={{ display: "grid", gap: 10 }}
+          />
         </Form.Item>
         <Form.Item
           name="attitude"

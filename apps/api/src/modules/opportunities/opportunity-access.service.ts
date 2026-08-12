@@ -37,7 +37,8 @@ export class OpportunityAccessService {
         item.assignments.some(
           (assignment) => assignment.handlerGrantId === grant.id,
         )) ||
-      (grant.role === "MUNICIPAL" && item.state === "CLOSED_SUCCESS");
+      (["MUNICIPAL", "SENIOR_MUNICIPAL_ADMIN"].includes(grant.role) &&
+        item.state === "CLOSED_SUCCESS");
     if (!allowed) throw forbidden("当前角色无权查看该商机");
     return item;
   }

@@ -10,7 +10,7 @@
     "dev": "pnpm --parallel --filter @oms/api --filter @oms/web dev",
     "build": "pnpm --filter @oms/contracts build && pnpm --filter @oms/api build && pnpm --filter @oms/web build",
     "lint": "pnpm -r lint",
-    "typecheck": "pnpm --filter @oms/contracts build && pnpm -r typecheck",
+    "typecheck": "pnpm --filter @oms/contracts build && pnpm --filter @oms/contracts typecheck && pnpm --filter @oms/api typecheck && pnpm --filter @oms/web typecheck",
     "test": "pnpm --filter @oms/api test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

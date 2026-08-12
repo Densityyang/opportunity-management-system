@@ -283,7 +283,9 @@ paths:
           content:
             {
               application/json:
-                { schema: { $ref: "#/components/schemas/VersionRequest" } },
+                {
+                  schema: { $ref: "#/components/schemas/FirstApproveRequest" },
+                },
             },
         }
       responses:
@@ -583,9 +585,43 @@ paths:
           "200": { $ref: "#/components/responses/Xlsx" },
           default: { $ref: "#/components/responses/Problem" },
         }
+  /admin/capabilities:
+    get:
+      operationId: getAdminCapabilities
+      responses:
+        {
+          "200":
+            {
+              description: capabilities resolved from the active role grant,
+              content:
+                {
+                  application/json:
+                    {
+                      schema:
+                        { $ref: "#/components/schemas/AdminCapabilities" },
+                    },
+                },
+            },
+          default: { $ref: "#/components/responses/Problem" },
+        }
   /admin/users:
     get:
       operationId: listUsers
+      parameters:
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PageSize" }
+        - { in: query, name: search, schema: { type: string, maxLength: 80 } }
+        - {
+            in: query,
+            name: role,
+            schema: { $ref: "#/components/schemas/RoleCode" },
+          }
+        - {
+            in: query,
+            name: districtId,
+            schema: { type: string, format: uuid },
+          }
+        - { in: query, name: active, schema: { type: boolean } }
       responses:
         {
           "200": { description: accounts and grants },
@@ -605,6 +641,44 @@ paths:
       responses:
         {
           "201": { description: created },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /admin/users/{userId}:
+    patch:
+      operationId: updateUser
+      parameters: [{ $ref: "#/components/parameters/UserId" }]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/UpdateUserRequest" } },
+            },
+        }
+      responses:
+        {
+          "200": { description: updated },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /admin/users/{userId}/reset-password:
+    post:
+      operationId: resetUserPassword
+      parameters: [{ $ref: "#/components/parameters/UserId" }]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema: { $ref: "#/components/schemas/ResetPasswordRequest" },
+                },
+            },
+        }
+      responses:
+        {
+          "201": { description: password reset and active sessions revoked },
           default: { $ref: "#/components/responses/Problem" },
         }
   /admin/users/{userId}/grants:
@@ -636,30 +710,56 @@ paths:
           "201": { description: created },
           default: { $ref: "#/components/responses/Problem" },
         }
-  /admin/districts/{districtId}/routing:
-    post:
-      operationId: upsertDistrictRouting
-      parameters:
-        [
-          {
-            in: path,
-            name: districtId,
-            required: true,
-            schema: { type: string, format: uuid },
-          },
-        ]
+  /admin/grants/{grantId}:
+    delete:
+      operationId: deactivateRoleGrant
+      parameters: [{ $ref: "#/components/parameters/GrantId" }]
+      responses:
+        {
+          "200": { description: grant deactivated },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /admin/districts:
+    get:
+      operationId: listAdminDistrictCoverage
+      responses:
+        {
+          "200":
+            {
+              description: districts in the active administration scope with role-derived coverage,
+              content:
+                {
+                  application/json:
+                    {
+                      schema:
+                        {
+                          type: array,
+                          items: { $ref: "#/components/schemas/AdminDistrict" },
+                        },
+                    },
+                },
+            },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /admin/districts/{districtId}:
+    patch:
+      operationId: updateDistrict
+      parameters: [{ $ref: "#/components/parameters/DistrictId" }]
       requestBody:
         {
           required: true,
           content:
             {
               application/json:
-                { schema: { $ref: "#/components/schemas/RoutingRequest" } },
+                {
+                  schema:
+                    { $ref: "#/components/schemas/UpdateDistrictRequest" },
+                },
             },
         }
       responses:
         {
-          "201": { description: saved },
+          "200": { description: district updated },
           default: { $ref: "#/components/responses/Problem" },
         }
   /admin/retention/{candidateId}/complete:
@@ -688,6 +788,188 @@ paths:
           "201": { description: completed },
           default: { $ref: "#/components/responses/Problem" },
         }
+  /admin/personnel:
+    get:
+      operationId: listPersonnel
+      parameters:
+        [
+          { $ref: "#/components/parameters/Page" },
+          {
+            in: query,
+            name: pageSize,
+            schema: { type: integer, minimum: 1, maximum: 200, default: 50 },
+          },
+          { in: query, name: search, schema: { type: string, maxLength: 120 } },
+          { in: query, name: active, schema: { type: boolean } },
+        ]
+      responses:
+        {
+          "200":
+            {
+              description: personnel page,
+              content:
+                {
+                  application/json:
+                    { schema: { $ref: "#/components/schemas/PersonnelPage" } },
+                },
+            },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /admin/personnel/import:
+    post:
+      operationId: importPersonnel
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              multipart/form-data:
+                {
+                  schema:
+                    { $ref: "#/components/schemas/PersonnelImportRequest" },
+                },
+            },
+        }
+      responses:
+        {
+          "201":
+            {
+              description: import result,
+              content:
+                {
+                  application/json:
+                    {
+                      schema: { $ref: "#/components/schemas/PersonnelImport" },
+                    },
+                },
+            },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /admin/personnel/imports:
+    get:
+      operationId: listPersonnelImports
+      responses:
+        {
+          "200":
+            {
+              description: recent import records,
+              content:
+                {
+                  application/json:
+                    {
+                      schema:
+                        {
+                          type: array,
+                          items:
+                            { $ref: "#/components/schemas/PersonnelImport" },
+                        },
+                    },
+                },
+            },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /admin/personnel/{personnelId}/account:
+    post:
+      operationId: createPersonnelAccount
+      parameters:
+        [
+          {
+            in: path,
+            name: personnelId,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: "#/components/schemas/PersonnelAccountRequest" },
+                },
+            },
+        }
+      responses:
+        {
+          "201": { description: account created or linked },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /admin/personnel-positions:
+    get:
+      operationId: listPersonnelPositions
+      responses:
+        {
+          "200":
+            {
+              description: configured positions,
+              content:
+                {
+                  application/json:
+                    {
+                      schema:
+                        {
+                          type: array,
+                          items:
+                            { $ref: "#/components/schemas/PersonnelPosition" },
+                        },
+                    },
+                },
+            },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+    post:
+      operationId: createPersonnelPosition
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: "#/components/schemas/PersonnelPositionRequest" },
+                },
+            },
+        }
+      responses:
+        {
+          "201": { description: position created },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /admin/personnel-positions/{positionId}:
+    patch:
+      operationId: updatePersonnelPosition
+      parameters:
+        [
+          {
+            in: path,
+            name: positionId,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    {
+                      $ref: "#/components/schemas/PersonnelPositionUpdateRequest",
+                    },
+                },
+            },
+        }
+      responses:
+        {
+          "200": { description: position updated },
+          default: { $ref: "#/components/responses/Problem" },
+        }
 components:
   securitySchemes:
     cookieAuth: { type: apiKey, in: cookie, name: oms_session }
@@ -697,6 +979,27 @@ components:
       {
         in: path,
         name: opportunityId,
+        required: true,
+        schema: { type: string, format: uuid },
+      }
+    UserId:
+      {
+        in: path,
+        name: userId,
+        required: true,
+        schema: { type: string, format: uuid },
+      }
+    GrantId:
+      {
+        in: path,
+        name: grantId,
+        required: true,
+        schema: { type: string, format: uuid },
+      }
+    DistrictId:
+      {
+        in: path,
+        name: districtId,
         required: true,
         schema: { type: string, format: uuid },
       }
@@ -756,7 +1059,7 @@ components:
       properties:
         {
           phone: { type: string, pattern: '^1[3-9]\d{9}$' },
-          password: { type: string, minLength: 8, maxLength: 128 },
+          password: { type: string, minLength: 6, maxLength: 12 },
         }
     ChangePasswordRequest:
       type: object
@@ -764,14 +1067,14 @@ components:
       required: [currentPassword, newPassword]
       properties:
         {
-          currentPassword: { type: string, minLength: 8 },
-          newPassword: { type: string, minLength: 12, maxLength: 128 },
+          currentPassword: { type: string, minLength: 6, maxLength: 12 },
+          newPassword: { type: string, minLength: 6, maxLength: 12 },
         }
     ReauthRequest:
       type: object
       additionalProperties: false
       required: [password]
-      properties: { password: { type: string, minLength: 8 } }
+      properties: { password: { type: string, minLength: 6, maxLength: 12 } }
     RoleCode:
       {
         type: string,
@@ -782,12 +1085,30 @@ components:
             PERSONAL_HANDLER,
             ORGANIZATION_HANDLER,
             MUNICIPAL,
+            SENIOR_MUNICIPAL_ADMIN,
             SYSTEM_ADMIN,
           ],
       }
     CustomerType: { type: string, enum: [PERSONAL, ORGANIZATION] }
     CustomerAttitude:
       { type: string, enum: [URGENT, IMPORTANT, GENERAL, POTENTIAL] }
+    SpecificNeedOption:
+      {
+        type: string,
+        enum:
+          [
+            想新装、升级宽带或专线,
+            家里、商铺或办公室网络不好,
+            想装监控、安防、门禁或考勤,
+            想了解全屋智能、智能家庭,
+            需要办公网络、园区网络或Wi-Fi建设,
+            需要云服务、网络安全、算力或AI应用,
+            需要通信工程、线路迁改或机房建设,
+            客户准备装修、搬家、开店或搬办公室,
+            不清楚具体产品，客户希望专业人员看看,
+            其他需求,
+          ],
+      }
     OpportunityState:
       {
         type: string,
@@ -806,14 +1127,72 @@ components:
     District:
       type: object
       additionalProperties: false
-      required: [id, code, name, enabled]
+      required: [id, code, name, enabled, sortOrder]
       properties:
         {
           id: { type: string, format: uuid },
           code: { type: string },
           name: { type: string },
           enabled: { type: boolean },
+          sortOrder: { type: integer },
         }
+    AdminDistrict:
+      allOf:
+        - { $ref: "#/components/schemas/District" }
+        - type: object
+          required: [coverage]
+          properties:
+            coverage:
+              type: object
+              additionalProperties: false
+              required:
+                [
+                  fieldReporters,
+                  managers,
+                  personalHandlers,
+                  organizationHandlers,
+                ]
+              properties:
+                fieldReporters: { type: integer, minimum: 0 }
+                managers: { type: integer, minimum: 0 }
+                personalHandlers: { type: integer, minimum: 0 }
+                organizationHandlers: { type: integer, minimum: 0 }
+    AdminCapabilities:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          activeRole,
+          districtId,
+          manageableRoles,
+          canManageGlobalUsers,
+          canManageDistricts,
+          canViewPersonnel,
+          canImportPersonnel,
+          canManagePositions,
+          canManageRetention,
+          canViewMunicipal,
+        ]
+      properties:
+        activeRole:
+          {
+            type: string,
+            enum: [SYSTEM_ADMIN, SENIOR_MUNICIPAL_ADMIN, DISTRICT_MANAGER],
+          }
+        districtId: { type: [string, "null"], format: uuid }
+        manageableRoles:
+          {
+            type: array,
+            uniqueItems: true,
+            items: { $ref: "#/components/schemas/RoleCode" },
+          }
+        canManageGlobalUsers: { type: boolean }
+        canManageDistricts: { type: boolean }
+        canViewPersonnel: { type: boolean }
+        canImportPersonnel: { type: boolean }
+        canManagePositions: { type: boolean }
+        canManageRetention: { type: boolean }
+        canViewMunicipal: { type: boolean }
     RoleGrant:
       type: object
       additionalProperties: false
@@ -846,7 +1225,7 @@ components:
           customerType,
           districtId,
           customerContact,
-          specificNeed,
+          specificNeeds,
           attitude,
           consentConfirmed,
         ]
@@ -854,7 +1233,14 @@ components:
         customerType: { $ref: "#/components/schemas/CustomerType" }
         districtId: { type: string, format: uuid }
         customerContact: { type: string, minLength: 1, maxLength: 200 }
-        specificNeed: { type: string, minLength: 1, maxLength: 2000 }
+        specificNeeds:
+          {
+            type: array,
+            minItems: 1,
+            maxItems: 2,
+            uniqueItems: true,
+            items: { $ref: "#/components/schemas/SpecificNeedOption" },
+          }
         attitude: { $ref: "#/components/schemas/CustomerAttitude" }
         oneSentenceDescription: { type: string, maxLength: 50 }
         consentConfirmed: { type: boolean, const: true }
@@ -867,7 +1253,7 @@ components:
           customerType,
           districtId,
           customerContact,
-          specificNeed,
+          specificNeeds,
           attitude,
           consentConfirmed,
         ]
@@ -876,7 +1262,14 @@ components:
         customerType: { $ref: "#/components/schemas/CustomerType" }
         districtId: { type: string, format: uuid }
         customerContact: { type: string, minLength: 1, maxLength: 200 }
-        specificNeed: { type: string, minLength: 1, maxLength: 2000 }
+        specificNeeds:
+          {
+            type: array,
+            minItems: 1,
+            maxItems: 2,
+            uniqueItems: true,
+            items: { $ref: "#/components/schemas/SpecificNeedOption" },
+          }
         attitude: { $ref: "#/components/schemas/CustomerAttitude" }
         oneSentenceDescription: { type: string, maxLength: 50 }
         consentConfirmed: { type: boolean, const: true }
@@ -885,6 +1278,15 @@ components:
       additionalProperties: false
       required: [expectedVersion]
       properties: { expectedVersion: { type: integer, minimum: 1 } }
+    FirstApproveRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, handlerGrantId]
+      properties:
+        {
+          expectedVersion: { type: integer, minimum: 1 },
+          handlerGrantId: { type: string, format: uuid },
+        }
     ReturnRequest:
       type: object
       additionalProperties: false
@@ -960,6 +1362,7 @@ components:
           customerType,
           district,
           customerContact,
+          specificNeeds,
           specificNeed,
           attitude,
           consentAt,
@@ -974,6 +1377,14 @@ components:
         district: { $ref: "#/components/schemas/District" }
         customerContact: { type: string }
         specificNeed: { type: string }
+        specificNeeds:
+          {
+            type: array,
+            minItems: 1,
+            maxItems: 2,
+            uniqueItems: true,
+            items: { $ref: "#/components/schemas/SpecificNeedOption" },
+          }
         attitude: { $ref: "#/components/schemas/CustomerAttitude" }
         oneSentenceDescription: { type: [string, "null"] }
         successOpportunityName: { type: [string, "null"] }
@@ -1003,13 +1414,34 @@ components:
     CreateUserRequest:
       type: object
       additionalProperties: false
-      required: [phone, displayName, initialPassword]
+      required: [phone, displayName, initialPassword, grants]
       properties:
-        {
-          phone: { type: string, pattern: '^1[3-9]\d{9}$' },
-          displayName: { type: string, minLength: 1, maxLength: 80 },
-          initialPassword: { type: string, minLength: 12, maxLength: 128 },
-        }
+        phone: { type: string, pattern: '^1[3-9]\d{9}$' }
+        displayName: { type: string, minLength: 1, maxLength: 80 }
+        initialPassword: { type: string, minLength: 6, maxLength: 12 }
+        grants:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/CreateRoleGrantRequest" }
+    UpdateUserRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 80 }
+        active: { type: boolean }
+    ResetPasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [initialPassword]
+      properties:
+        initialPassword: { type: string, minLength: 6, maxLength: 12 }
+    UpdateDistrictRequest:
+      type: object
+      additionalProperties: false
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
     CreateRoleGrantRequest:
       type: object
       additionalProperties: false
@@ -1019,17 +1451,162 @@ components:
           role: { $ref: "#/components/schemas/RoleCode" },
           districtId: { type: string, format: uuid },
         }
-    RoutingRequest:
+    PersonnelImportRequest:
       type: object
       additionalProperties: false
-      required:
-        [managerGrantId, personalHandlerGrantId, organizationHandlerGrantId]
+      required: [file]
       properties:
-        {
-          managerGrantId: { type: string, format: uuid },
-          personalHandlerGrantId: { type: string, format: uuid },
-          organizationHandlerGrantId: { type: string, format: uuid },
-        }
+        file: { type: string, format: binary }
+        mode: { type: string, enum: [UPSERT, SNAPSHOT], default: UPSERT }
+        dryRun: { type: boolean, default: false }
+        createAccounts: { type: boolean, default: false }
+        initialPassword: { type: string, minLength: 6, maxLength: 12 }
+        provisionSystemAdminCount:
+          { type: integer, minimum: 0, maximum: 20, default: 0 }
+        provisionSystemAdminPhone: { type: string, pattern: '^1[3-9]\d{9}$' }
+    Personnel:
+      type: object
+      required:
+        [
+          id,
+          personnelCode,
+          name,
+          sourceProfile,
+          recommendedRoles,
+          active,
+          userId,
+          lastSyncedAt,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        personnelCode: { type: string }
+        name: { type: string }
+        personalPhone: { type: [string, "null"] }
+        workPhone: { type: [string, "null"] }
+        organizationPath: { type: [string, "null"] }
+        firstLevelOrganization: { type: [string, "null"] }
+        secondLevelOrganization: { type: [string, "null"] }
+        thirdLevelOrganization: { type: [string, "null"] }
+        positionName: { type: [string, "null"] }
+        businessLine: { type: [string, "null"] }
+        positionCategory: { type: [string, "null"] }
+        standardPosition: { type: [string, "null"] }
+        positionTags: { type: [string, "null"] }
+        employmentStatus: { type: [string, "null"] }
+        personnelType: { type: [string, "null"] }
+        cooperativeEnterprise: { type: [string, "null"] }
+        sourceProfile: { type: string, enum: [FULL_DIRECTORY, CONTACT_ONLY] }
+        recommendedRoles:
+          {
+            type: array,
+            uniqueItems: true,
+            items: { $ref: "#/components/schemas/RoleCode" },
+          }
+        active: { type: boolean }
+        userId: { type: [string, "null"], format: uuid }
+        lastSyncedAt: { type: string, format: date-time }
+    PersonnelPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          { type: array, items: { $ref: "#/components/schemas/Personnel" } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+    PersonnelImport:
+      type: object
+      required:
+        [
+          id,
+          fileName,
+          mode,
+          status,
+          sourceProfile,
+          totalRows,
+          createdRows,
+          updatedRows,
+          deactivatedRows,
+          skippedRows,
+          accountsCreated,
+          accountsLinked,
+          warnings,
+          createdAt,
+          completedAt,
+        ]
+      properties:
+        id: { type: string }
+        fileName: { type: string }
+        mode: { type: string, enum: [UPSERT, SNAPSHOT] }
+        status: { type: string, enum: [PREVIEW, APPLIED, FAILED] }
+        sourceProfile: { type: string, enum: [FULL_DIRECTORY, CONTACT_ONLY] }
+        totalRows: { type: integer }
+        createdRows: { type: integer }
+        updatedRows: { type: integer }
+        deactivatedRows: { type: integer }
+        skippedRows: { type: integer }
+        accountsCreated: { type: integer }
+        accountsLinked: { type: integer }
+        warnings: { type: array, items: { type: string } }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: [string, "null"], format: date-time }
+    PersonnelAccountRequest:
+      type: object
+      additionalProperties: false
+      required: [grants]
+      properties:
+        passwordMode:
+          {
+            type: string,
+            enum: [PHONE_LAST_6, EXPLICIT],
+            default: PHONE_LAST_6,
+          }
+        initialPassword: { type: string, minLength: 6, maxLength: 12 }
+        grants:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/CreateRoleGrantRequest" }
+    PersonnelPositionRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name, roles]
+      properties:
+        code: { type: string, minLength: 1, maxLength: 40 }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        roles:
+          {
+            type: array,
+            maxItems: 7,
+            uniqueItems: true,
+            items: { $ref: "#/components/schemas/RoleCode" },
+          }
+    PersonnelPositionUpdateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        enabled: { type: boolean }
+        roles:
+          {
+            type: array,
+            maxItems: 7,
+            uniqueItems: true,
+            items: { $ref: "#/components/schemas/RoleCode" },
+          }
+    PersonnelPosition:
+      type: object
+      required: [id, code, name, enabled, roles]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        enabled: { type: boolean }
+        roles:
+          {
+            type: array,
+            uniqueItems: true,
+            items: { $ref: "#/components/schemas/RoleCode" },
+          }
     RetentionRequest:
       type: object
       additionalProperties: false

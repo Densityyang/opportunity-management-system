@@ -11,26 +11,27 @@ const prisma = new PrismaClient({
 });
 
 const districts = [
-  ["510104", "锦江区"],
-  ["510105", "青羊区"],
-  ["510106", "金牛区"],
-  ["510107", "武侯区"],
-  ["510108", "成华区"],
-  ["510112", "龙泉驿区"],
-  ["510113", "青白江区"],
-  ["510114", "新都区"],
-  ["510115", "温江区"],
-  ["510116", "双流区"],
-  ["510117", "郫都区"],
-  ["510118", "新津区"],
-  ["510181", "都江堰市"],
-  ["510182", "彭州市"],
-  ["510183", "邛崃市"],
-  ["510184", "崇州市"],
-  ["510185", "简阳市"],
-  ["510121", "金堂县"],
-  ["510129", "大邑县"],
-  ["510131", "蒲江县"],
+  ["510106", "金牛", 1],
+  ["510108", "成华", 2],
+  ["510105", "青羊", 3],
+  ["510104", "锦江", 4],
+  ["510107", "武侯", 5],
+  ["GX_NAN", "高新南", 6],
+  ["GX_XI", "高新西", 7],
+  ["DB_XQ", "东部新区", 8],
+  ["510129", "大邑", 9],
+  ["510185", "简阳", 10],
+  ["510121", "金堂", 11],
+  ["510114", "新都", 12],
+  ["510115", "温江", 13],
+  ["510117", "郫都", 14],
+  ["510182", "彭州", 15],
+  ["510184", "崇州", 16],
+  ["510118", "新津", 17],
+  ["510183", "邛崃", 18],
+  ["510131", "蒲江", 19],
+  ["510113", "青白江", 20],
+  ["510181", "都江堰", 21],
 ] as const;
 
 function readKey(name: string): Buffer {
@@ -66,11 +67,24 @@ function blindIndex(value: string): string {
 }
 
 async function main(): Promise<void> {
-  for (const [code, name] of districts) {
+  for (const [code, name, sortOrder] of districts) {
     await prisma.district.upsert({
       where: { code },
-      create: { code, name },
-      update: { name },
+      create: { code, name, sortOrder, enabled: true },
+      update: { name, sortOrder, enabled: true },
+    });
+  }
+  await prisma.district.updateMany({
+    where: { code: { notIn: districts.map(([code]) => code) } },
+    data: { enabled: false, sortOrder: 999 },
+  });
+  for (const [code, name, sortOrder] of [
+    ["510112", "龙泉驿", 901],
+    ["510116", "双流", 902],
+  ] as const) {
+    await prisma.district.updateMany({
+      where: { code },
+      data: { name, sortOrder, enabled: false },
     });
   }
 
@@ -80,10 +94,8 @@ async function main(): Promise<void> {
     throw new Error(
       "BOOTSTRAP_ADMIN_PHONE must be a valid mainland China mobile number",
     );
-  if (!password || password.length < 12)
-    throw new Error(
-      "BOOTSTRAP_ADMIN_PASSWORD must have at least 12 characters",
-    );
+  if (!password || password.length < 6 || password.length > 12)
+    throw new Error("BOOTSTRAP_ADMIN_PASSWORD must have 6 to 12 characters");
   const encrypted = encrypt(phone);
   const phoneBlindIndex = blindIndex(phone);
   const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
@@ -105,6 +117,11 @@ async function main(): Promise<void> {
   if (!existingGrant)
     await prisma.roleGrant.create({
       data: { userId: user.id, role: "SYSTEM_ADMIN" },
+    });
+  else if (!existingGrant.active)
+    await prisma.roleGrant.update({
+      where: { id: existingGrant.id },
+      data: { active: true },
     });
 }
 

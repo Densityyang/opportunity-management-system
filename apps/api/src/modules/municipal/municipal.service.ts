@@ -11,6 +11,7 @@ import { forbidden, notFound } from "../../common/http-error";
 import { PrismaService } from "../../common/prisma.service";
 import type { Prisma } from "../../generated/prisma/client";
 import { OpportunitiesService } from "../opportunities/opportunities.service";
+import { displaySpecificNeeds } from "../opportunities/specific-needs";
 import {
   SuccessExportDto,
   SuccessLibraryQueryDto,
@@ -152,6 +153,7 @@ export class MunicipalService {
       { header: "流转后状态", key: "toState", width: 24 },
       { header: "操作人", key: "actor", width: 16 },
       { header: "操作角色", key: "actorRole", width: 24 },
+      { header: "关键承接人", key: "keyPerson", width: 18 },
       { header: "节点说明", key: "note", width: 40 },
       { header: "节点时间", key: "occurredAt", width: 22 },
       { header: "成功商机名称", key: "successName", width: 36 },
@@ -195,11 +197,13 @@ export class MunicipalService {
                 }),
               ),
               specificNeed: this.safeCell(
-                this.crypto.decrypt({
-                  ciphertext: item.specificNeedCiphertext,
-                  iv: item.specificNeedIv,
-                  tag: item.specificNeedTag,
-                }),
+                displaySpecificNeeds(
+                  this.crypto.decrypt({
+                    ciphertext: item.specificNeedCiphertext,
+                    iv: item.specificNeedIv,
+                    tag: item.specificNeedTag,
+                  }),
+                ),
               ),
               currentState: item.state,
               eventType: event.eventType,
@@ -207,6 +211,9 @@ export class MunicipalService {
               toState: event.toState,
               actor: this.safeCell(event.actor?.displayName ?? "系统"),
               actorRole: event.actorRole ?? "SYSTEM",
+              keyPerson: this.safeCell(
+                this.workflowKeyPersonName(event.metadata) ?? "",
+              ),
               note: this.safeCell(
                 this.decryptOptional(
                   event.noteCiphertext,
@@ -326,11 +333,13 @@ export class MunicipalService {
                 }),
               ),
               specificNeed: this.safeCell(
-                this.crypto.decrypt({
-                  ciphertext: item.specificNeedCiphertext,
-                  iv: item.specificNeedIv,
-                  tag: item.specificNeedTag,
-                }),
+                displaySpecificNeeds(
+                  this.crypto.decrypt({
+                    ciphertext: item.specificNeedCiphertext,
+                    iv: item.specificNeedIv,
+                    tag: item.specificNeedTag,
+                  }),
+                ),
               ),
               closedAt: item.closedAt ? this.shanghaiTime(item.closedAt) : "",
             })
@@ -415,8 +424,13 @@ export class MunicipalService {
   }
 
   private assertMunicipal(identity: AuthIdentity): void {
-    if (identity.activeGrant?.role !== "MUNICIPAL")
-      throw forbidden("仅市公司角色可访问该模块");
+    if (
+      !identity.activeGrant ||
+      !["MUNICIPAL", "SENIOR_MUNICIPAL_ADMIN"].includes(
+        identity.activeGrant.role,
+      )
+    )
+      throw forbidden("仅市公司角色或高级市公司管理员可访问该模块");
   }
 
   private decryptSuccessName(
@@ -435,6 +449,15 @@ export class MunicipalService {
           tag: result.successNameTag,
         })
       : null;
+  }
+
+  private workflowKeyPersonName(
+    metadata: Prisma.JsonValue | null,
+  ): string | null {
+    if (!metadata || Array.isArray(metadata) || typeof metadata !== "object")
+      return null;
+    const value = metadata.keyPersonName;
+    return typeof value === "string" ? value : null;
   }
 
   private decryptOptional(

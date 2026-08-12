@@ -297,9 +297,9 @@ export function SuccessLibraryPage() {
           <Form.Item
             name="password"
             label="当前密码"
-            rules={[{ required: true }]}
+            rules={[{ required: true }, { min: 6 }, { max: 12 }]}
           >
-            <Input.Password autoComplete="current-password" />
+            <Input.Password autoComplete="current-password" maxLength={12} />
           </Form.Item>
         </Form>
       </Modal>

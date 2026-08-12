@@ -32,6 +32,7 @@ const roleLabels: Record<RoleCode, string> = {
   PERSONAL_HANDLER: "个人侧管理员",
   ORGANIZATION_HANDLER: "组织侧管理员",
   MUNICIPAL: "市公司",
+  SENIOR_MUNICIPAL_ADMIN: "高级市公司管理员",
   SYSTEM_ADMIN: "系统管理员",
 };
 
@@ -72,17 +73,21 @@ export function AppLayout({ children }: PropsWithChildren) {
         label: "待办与商机",
       });
     }
-    if (role === "MUNICIPAL")
+    if (["MUNICIPAL", "SENIOR_MUNICIPAL_ADMIN"].includes(role ?? ""))
       base.push({
         key: "/municipal/successes",
         icon: <FileDoneOutlined />,
         label: "成功商机库",
       });
-    if (role === "SYSTEM_ADMIN")
+    if (
+      ["SYSTEM_ADMIN", "SENIOR_MUNICIPAL_ADMIN", "DISTRICT_MANAGER"].includes(
+        role ?? "",
+      )
+    )
       base.push({
         key: "/admin",
         icon: <SettingOutlined />,
-        label: "系统配置",
+        label: role === "DISTRICT_MANAGER" ? "本区账号与角色" : "账号与配置",
       });
     base.push({ key: "/notifications", icon: <BellOutlined />, label: "通知" });
     base.push({

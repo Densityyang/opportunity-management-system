@@ -1,4 +1,11 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
+import {
+  SPECIFIC_NEED_OPTIONS,
+  type OpportunityDetail,
+  type OpportunitySummary,
+  type PageResult,
+  type WorkflowTimelineItem,
+} from "@oms/contracts";
 import { randomBytes } from "node:crypto";
 import type { AuthIdentity } from "../../common/auth.types";
 import {
@@ -8,18 +15,20 @@ import {
 import { forbidden, notFound, versionConflict } from "../../common/http-error";
 import { PrismaService } from "../../common/prisma.service";
 import { Prisma } from "../../generated/prisma/client";
-import type {
-  OpportunityDetail,
-  OpportunitySummary,
-  PageResult,
-  WorkflowTimelineItem,
-} from "@oms/contracts";
 import {
   SubmitOpportunityDto,
   ResubmitOpportunityDto,
   OpportunityListQueryDto,
 } from "./opportunity.dto";
 import { OpportunityAccessService } from "./opportunity-access.service";
+import {
+  deserializeSpecificNeeds,
+  displaySpecificNeeds,
+  serializeSpecificNeeds,
+} from "./specific-needs";
+
+type Tx = Prisma.TransactionClient;
+type ManagerGrant = { id: string; userId: string };
 
 @Injectable()
 export class OpportunitiesService {
@@ -39,27 +48,20 @@ export class OpportunitiesService {
         errorCode: "CONSENT_REQUIRED",
       });
     }
-    const district = await this.prisma.district.findUnique({
-      where: { id: dto.districtId },
-      include: {
-        routing: { include: { manager: { include: { user: true } } } },
-      },
-    });
-    const routing = district?.routing;
-    if (!district?.enabled || !routing || !routing.manager.active) {
-      throw new BadRequestException({
-        message: "该区县尚未配置有效承接路由",
-        errorCode: "ROUTING_NOT_CONFIGURED",
-      });
-    }
     const now = new Date();
     const reporterPhone = this.crypto.encrypt(identity.phone);
     const contact = this.crypto.encrypt(dto.customerContact.trim());
-    const need = this.crypto.encrypt(dto.specificNeed.trim());
+    const specificNeeds = this.normalizeSpecificNeeds(dto);
+    const need = this.crypto.encrypt(serializeSpecificNeeds(specificNeeds));
     const description = this.optionalEncrypted(dto.oneSentenceDescription);
     const serialNumber = this.serialNumber(now);
 
     const created = await this.prisma.$transaction(async (tx) => {
+      const managers = await this.assertDistrictCoverage(
+        tx,
+        dto.districtId,
+        dto.customerType,
+      );
       const item = await tx.opportunity.create({
         data: {
           serialNumber,
@@ -123,15 +125,15 @@ export class OpportunitiesService {
           deadlineAt,
         },
       });
-      await tx.notification.create({
-        data: {
-          recipientUserId: routing.manager.userId,
-          recipientGrantId: routing.managerGrantId,
+      await tx.notification.createMany({
+        data: managers.map((manager) => ({
+          recipientUserId: manager.userId,
+          recipientGrantId: manager.id,
           opportunityId: item.id,
           type: "FIRST_REVIEW_PENDING",
           title: "有新的商机待初审",
           body: `${serialNumber} 已提交，请在 24 小时内处理。`,
-        },
+        })),
       });
       await tx.outboxEvent.create({
         data: {
@@ -155,20 +157,10 @@ export class OpportunitiesService {
         message: "必须重新确认客户授权提示",
         errorCode: "CONSENT_REQUIRED",
       });
-    const district = await this.prisma.district.findUnique({
-      where: { id: dto.districtId },
-      include: { routing: { include: { manager: true } } },
-    });
-    const routing = district?.routing;
-    if (!district?.enabled || !routing || !routing.manager.active) {
-      throw new BadRequestException({
-        message: "该区县尚未配置有效承接路由",
-        errorCode: "ROUTING_NOT_CONFIGURED",
-      });
-    }
     const now = new Date();
     const contact = this.crypto.encrypt(dto.customerContact.trim());
-    const need = this.crypto.encrypt(dto.specificNeed.trim());
+    const specificNeeds = this.normalizeSpecificNeeds(dto);
+    const need = this.crypto.encrypt(serializeSpecificNeeds(specificNeeds));
     const description = this.optionalEncrypted(dto.oneSentenceDescription);
     await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "opportunities" WHERE id = ${opportunityId}::uuid FOR UPDATE`;
@@ -187,6 +179,11 @@ export class OpportunitiesService {
           message: "当前状态不能重新提交",
           errorCode: "INVALID_TRANSITION",
         });
+      const managers = await this.assertDistrictCoverage(
+        tx,
+        dto.districtId,
+        dto.customerType,
+      );
       const revisionNumber =
         (await tx.opportunityRevision.count({ where: { opportunityId } })) + 1;
       const reporterPhone = {
@@ -257,15 +254,15 @@ export class OpportunitiesService {
           deadlineAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
         },
       });
-      await tx.notification.create({
-        data: {
-          recipientUserId: routing.manager.userId,
-          recipientGrantId: routing.managerGrantId,
+      await tx.notification.createMany({
+        data: managers.map((manager) => ({
+          recipientUserId: manager.userId,
+          recipientGrantId: manager.id,
           opportunityId,
           type: "FIRST_REVIEW_RESUBMITTED",
           title: "退回商机已重新提交",
           body: `${current.serialNumber} 已重新提交，请在新的 24 小时周期内处理。`,
-        },
+        })),
       });
       await tx.outboxEvent.create({
         data: {
@@ -290,7 +287,7 @@ export class OpportunitiesService {
         ? { reporterId: identity.id }
         : grant.role === "DISTRICT_MANAGER"
           ? { districtId: grant.districtId! }
-          : grant.role === "MUNICIPAL"
+          : ["MUNICIPAL", "SENIOR_MUNICIPAL_ADMIN"].includes(grant.role)
             ? { state: "CLOSED_SUCCESS" as const }
             : {
                 assignments: {
@@ -336,6 +333,12 @@ export class OpportunitiesService {
   ): Promise<OpportunityDetail> {
     const item = await this.access.loadReadable(identity, opportunityId);
     const summary = this.toSummary(item);
+    const storedSpecificNeeds = this.crypto.decrypt({
+      ciphertext: item.specificNeedCiphertext,
+      iv: item.specificNeedIv,
+      tag: item.specificNeedTag,
+    });
+    const specificNeeds = deserializeSpecificNeeds(storedSpecificNeeds);
     return {
       ...summary,
       reporterPhone: this.crypto.decrypt({
@@ -348,11 +351,8 @@ export class OpportunitiesService {
         iv: item.customerContactIv,
         tag: item.customerContactTag,
       }),
-      specificNeed: this.crypto.decrypt({
-        ciphertext: item.specificNeedCiphertext,
-        iv: item.specificNeedIv,
-        tag: item.specificNeedTag,
-      }),
+      specificNeed: displaySpecificNeeds(storedSpecificNeeds),
+      specificNeeds,
       consentAt: item.consentAt.toISOString(),
       failureReason:
         item.result?.failureReasonCiphertext &&
@@ -393,6 +393,7 @@ export class OpportunitiesService {
       toState: event.toState,
       actorName: event.actor?.displayName ?? null,
       actorRole: event.actorRole,
+      keyPersonName: this.timelineKeyPersonName(event.metadata),
       note:
         event.noteCiphertext && event.noteIv && event.noteTag
           ? this.crypto.decrypt({
@@ -420,6 +421,7 @@ export class OpportunitiesService {
         code: item.district.code,
         name: item.district.name,
         enabled: item.district.enabled,
+        sortOrder: item.district.sortOrder,
       },
       oneSentenceDescription:
         item.descriptionCiphertext && item.descriptionIv && item.descriptionTag
@@ -453,6 +455,26 @@ export class OpportunitiesService {
     return normalized ? this.crypto.encrypt(normalized) : null;
   }
 
+  private normalizeSpecificNeeds(dto: { specificNeeds: string[] }): string[] {
+    const values = dto.specificNeeds.map((value) => value.trim());
+    const unique = [...new Set(values)];
+    if (
+      unique.length < 1 ||
+      unique.length > 2 ||
+      unique.length !== values.length ||
+      unique.some(
+        (value) =>
+          !(SPECIFIC_NEED_OPTIONS as readonly string[]).includes(value),
+      )
+    ) {
+      throw new BadRequestException({
+        message: "具体需求必须从菜单中选择，且最多选择两项",
+        errorCode: "INVALID_SPECIFIC_NEEDS",
+      });
+    }
+    return unique;
+  }
+
   private encryptedSnapshot(
     dto: SubmitOpportunityDto,
     reporterPhone: EncryptedValue,
@@ -476,6 +498,63 @@ export class OpportunitiesService {
 
   private snapshotValue(value: EncryptedValue): Record<string, string> {
     return { ciphertext: value.ciphertext, iv: value.iv, tag: value.tag };
+  }
+
+  private timelineKeyPersonName(
+    metadata: Prisma.JsonValue | null,
+  ): string | null {
+    if (!metadata || Array.isArray(metadata) || typeof metadata !== "object")
+      return null;
+    const value = metadata.keyPersonName;
+    return typeof value === "string" ? value : null;
+  }
+
+  private async assertDistrictCoverage(
+    tx: Tx,
+    districtId: string,
+    customerType: "PERSONAL" | "ORGANIZATION",
+  ): Promise<ManagerGrant[]> {
+    const district = await tx.district.findUnique({
+      where: { id: districtId },
+      select: { enabled: true },
+    });
+    if (!district?.enabled)
+      throw new BadRequestException({
+        message: "该商机承载区域当前不可用",
+        errorCode: "DISTRICT_UNAVAILABLE",
+      });
+
+    const handlerRole =
+      customerType === "PERSONAL" ? "PERSONAL_HANDLER" : "ORGANIZATION_HANDLER";
+    const grants = await tx.roleGrant.findMany({
+      where: {
+        districtId,
+        role: { in: ["DISTRICT_MANAGER", handlerRole] },
+        active: true,
+        user: { active: true },
+      },
+      select: { id: true, userId: true, role: true },
+      orderBy: { createdAt: "asc" },
+    });
+    const managers = [
+      ...new Map(
+        grants
+          .filter((grant) => grant.role === "DISTRICT_MANAGER")
+          .map((grant) => [
+            grant.userId,
+            { id: grant.id, userId: grant.userId },
+          ]),
+      ).values(),
+    ];
+    const hasHandler = grants.some((grant) => grant.role === handlerRole);
+    if (!managers.length || !hasHandler)
+      throw new BadRequestException({
+        message: `该区域尚未配置有效的区县经理或${
+          customerType === "PERSONAL" ? "个人侧" : "组织侧"
+        }承接人`,
+        errorCode: "DISTRICT_COVERAGE_NOT_CONFIGURED",
+      });
+    return managers;
   }
 
   private serialNumber(now: Date): string {

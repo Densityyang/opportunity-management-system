@@ -32,29 +32,22 @@ export function ChangePasswordPage() {
       <Card style={{ width: "min(100%, 460px)" }}>
         <Typography.Title level={3}>首次登录修改密码</Typography.Title>
         <Typography.Paragraph type="secondary">
-          新密码需 12–128 位，并同时包含大写字母、小写字母和数字。
+          新密码限定为 6–12 位。
         </Typography.Paragraph>
         <Form layout="vertical" onFinish={(values) => void submit(values)}>
           <Form.Item
             name="currentPassword"
             label="当前密码"
-            rules={[{ required: true }]}
+            rules={[{ required: true }, { min: 6 }, { max: 12 }]}
           >
-            <Input.Password />
+            <Input.Password maxLength={12} />
           </Form.Item>
           <Form.Item
             name="newPassword"
             label="新密码"
-            rules={[
-              { required: true },
-              { min: 12 },
-              {
-                pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/,
-                message: "需包含大小写字母和数字",
-              },
-            ]}
+            rules={[{ required: true }, { min: 6 }, { max: 12 }]}
           >
-            <Input.Password />
+            <Input.Password maxLength={12} />
           </Form.Item>
           <Form.Item
             name="confirm"
@@ -71,7 +64,7 @@ export function ChangePasswordPage() {
               }),
             ]}
           >
-            <Input.Password />
+            <Input.Password maxLength={12} />
           </Form.Item>
           <Button type="primary" htmlType="submit" block>
             保存新密码

@@ -5,6 +5,7 @@ import type { AuthIdentity } from "../../common/auth.types";
 import {
   ExpectedVersionDto,
   FailureResultDto,
+  FirstApproveDto,
   PauseDto,
   ReassignDto,
   ReturnDto,
@@ -22,7 +23,7 @@ export class WorkflowController {
   firstApprove(
     @CurrentIdentity() identity: AuthIdentity,
     @Param("opportunityId") id: string,
-    @Body() dto: ExpectedVersionDto,
+    @Body() dto: FirstApproveDto,
     @Headers("idempotency-key") key?: string,
   ) {
     return this.workflow.firstApprove(identity, id, dto, key);

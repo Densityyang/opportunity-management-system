@@ -22,6 +22,7 @@ import type {
 import type {
   ExpectedVersionDto,
   FailureResultDto,
+  FirstApproveDto,
   PauseDto,
   ReassignDto,
   ReturnDto,
@@ -61,7 +62,7 @@ export class WorkflowService {
   firstApprove(
     identity: AuthIdentity,
     opportunityId: string,
-    dto: ExpectedVersionDto,
+    dto: FirstApproveDto,
     key?: string,
   ) {
     return this.execute(
@@ -73,18 +74,23 @@ export class WorkflowService {
       dto,
       async (tx, item) => {
         this.assertManager(identity, item.districtId);
-        const routing = await tx.districtRouting.findUnique({
-          where: { districtId: item.districtId },
-          include: { personalHandler: true, organizationHandler: true },
-        });
-        const handler =
+        const expectedRole: RoleCode =
           item.customerType === "PERSONAL"
-            ? routing?.personalHandler
-            : routing?.organizationHandler;
-        if (!handler?.active || handler.districtId !== item.districtId) {
+            ? "PERSONAL_HANDLER"
+            : "ORGANIZATION_HANDLER";
+        const handler = await tx.roleGrant.findUnique({
+          where: { id: dto.handlerGrantId },
+          include: { user: true },
+        });
+        if (
+          !handler?.active ||
+          !handler.user.active ||
+          handler.role !== expectedRole ||
+          handler.districtId !== item.districtId
+        ) {
           throw new BadRequestException({
-            message: "区县默认承接人配置无效",
-            errorCode: "ROUTING_NOT_CONFIGURED",
+            message: "承接人必须为本区县有效且分侧角色匹配的账号",
+            errorCode: "INVALID_HANDLER",
           });
         }
         await this.replaceAssignment(
@@ -108,8 +114,13 @@ export class WorkflowService {
           item,
           "FIRST_REVIEW_APPROVED",
           "商机已通过区县初审",
-          `${item.serialNumber} 已交由承接人处理。`,
+          `${item.serialNumber} 已交由 ${handler.user.displayName} 处理。`,
         );
+        return {
+          keyPersonName: handler.user.displayName,
+          keyPersonRole: handler.role,
+          handlerGrantId: handler.id,
+        };
       },
     );
   }
@@ -165,9 +176,11 @@ export class WorkflowService {
             : "ORGANIZATION_HANDLER";
         const handler = await tx.roleGrant.findUnique({
           where: { id: dto.handlerGrantId },
+          include: { user: true },
         });
         if (
           !handler?.active ||
+          !handler.user.active ||
           handler.role !== expectedRole ||
           handler.districtId !== item.districtId
         ) {
@@ -196,8 +209,13 @@ export class WorkflowService {
           item,
           "HANDLER_REASSIGNED",
           "商机承接人已调整",
-          `${item.serialNumber} 的处理责任人已调整。`,
+          `${item.serialNumber} 的处理责任人已调整为 ${handler.user.displayName}。`,
         );
+        return {
+          keyPersonName: handler.user.displayName,
+          keyPersonRole: handler.role,
+          handlerGrantId: handler.id,
+        };
       },
       reason,
     );
@@ -568,7 +586,10 @@ export class WorkflowService {
     expectedVersion: number,
     idempotencyKey: string | undefined,
     requestBody: unknown,
-    mutate: (tx: Tx, item: NonNullable<LockedOpportunity>) => Promise<void>,
+    mutate: (
+      tx: Tx,
+      item: NonNullable<LockedOpportunity>,
+    ) => Promise<Prisma.InputJsonValue | void>,
     note?: string,
     extraUpdate: Prisma.OpportunityUpdateInput = {},
   ): Promise<TransitionResult> {
@@ -606,7 +627,7 @@ export class WorkflowService {
       if (item.version !== expectedVersion) throw versionConflict();
       const nextState = getNextWorkflowState(item.state, event);
       if (!nextState) throw invalidTransition();
-      await mutate(tx, item);
+      const eventMetadata = await mutate(tx, item);
       const encryptedNote = note ? this.crypto.encrypt(note) : null;
       const updated = await tx.opportunity.update({
         where: { id: item.id },
@@ -624,6 +645,7 @@ export class WorkflowService {
           noteCiphertext: encryptedNote?.ciphertext,
           noteIv: encryptedNote?.iv,
           noteTag: encryptedNote?.tag,
+          metadata: eventMetadata ?? undefined,
         },
       });
       const response: TransitionResult = {
@@ -720,18 +742,9 @@ export class WorkflowService {
         deadlineAt: new Date(now.getTime() + 48 * 60 * 60 * 1000),
       },
     });
-    const routing = await tx.districtRouting.findUnique({
-      where: { districtId: item.districtId },
-      include: { manager: true },
-    });
-    if (!routing?.manager.active)
-      throw new BadRequestException({
-        message: "区县经理配置无效",
-        errorCode: "ROUTING_NOT_CONFIGURED",
-      });
-    await this.notifyGrant(
+    await this.notifyDistrictManagers(
       tx,
-      routing.managerGrantId,
+      item.districtId,
       item.id,
       "FINAL_REVIEW_PENDING",
       "处理结果待审核",
@@ -772,8 +785,11 @@ export class WorkflowService {
     title: string,
     body: string,
   ) {
-    const grant = await tx.roleGrant.findUnique({ where: { id: grantId } });
-    if (!grant?.active) return;
+    const grant = await tx.roleGrant.findUnique({
+      where: { id: grantId },
+      include: { user: true },
+    });
+    if (!grant?.active || !grant.user.active) return;
     await tx.notification.create({
       data: {
         recipientUserId: grant.userId,
@@ -783,6 +799,43 @@ export class WorkflowService {
         title,
         body,
       },
+    });
+  }
+
+  private async notifyDistrictManagers(
+    tx: Tx,
+    districtId: string,
+    opportunityId: string,
+    type: string,
+    title: string,
+    body: string,
+  ): Promise<void> {
+    const grants = await tx.roleGrant.findMany({
+      where: {
+        districtId,
+        role: "DISTRICT_MANAGER",
+        active: true,
+        user: { active: true },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    const managers = [
+      ...new Map(grants.map((grant) => [grant.userId, grant])).values(),
+    ];
+    if (!managers.length)
+      throw new BadRequestException({
+        message: "该区县尚未配置有效区县经理",
+        errorCode: "DISTRICT_MANAGER_NOT_CONFIGURED",
+      });
+    await tx.notification.createMany({
+      data: managers.map((grant) => ({
+        recipientUserId: grant.userId,
+        recipientGrantId: grant.id,
+        opportunityId,
+        type,
+        title,
+        body,
+      })),
     });
   }
 

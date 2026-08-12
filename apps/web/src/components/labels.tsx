@@ -32,6 +32,7 @@ export const roleLabels: Record<RoleCode, string> = {
   PERSONAL_HANDLER: "个人侧管理员",
   ORGANIZATION_HANDLER: "组织侧管理员",
   MUNICIPAL: "市公司",
+  SENIOR_MUNICIPAL_ADMIN: "高级市公司管理员",
   SYSTEM_ADMIN: "系统管理员",
 };
 

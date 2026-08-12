@@ -9,7 +9,6 @@
     "outDir": "dist",
     "rootDir": ".",
     "baseUrl": ".",
-    "paths": { "@oms/contracts": ["../../packages/contracts/dist/index.d.ts"] },
     "incremental": true,
     "strictPropertyInitialization": false
   },

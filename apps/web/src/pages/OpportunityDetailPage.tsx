@@ -7,7 +7,11 @@ import {
   RetweetOutlined,
   StopOutlined,
 } from "@ant-design/icons";
-import type { OpportunityDetail, WorkflowTimelineItem } from "@oms/contracts";
+import {
+  SUCCESS_NAME_HINT,
+  type OpportunityDetail,
+  type WorkflowTimelineItem,
+} from "@oms/contracts";
 import {
   App,
   Button,
@@ -40,6 +44,7 @@ import {
 } from "../components/labels";
 
 type Action =
+  | "firstApprove"
   | "firstReturn"
   | "reassign"
   | "pause"
@@ -84,7 +89,11 @@ export function OpportunityDetailPage() {
   async function load(): Promise<void> {
     setLoading(true);
     try {
-      if (activeGrant?.role === "MUNICIPAL") {
+      if (
+        ["MUNICIPAL", "SENIOR_MUNICIPAL_ADMIN"].includes(
+          activeGrant?.role ?? "",
+        )
+      ) {
         const combined = await api<
           OpportunityDetail & { timeline: WorkflowTimelineItem[] }
         >(`/municipal/successes/${opportunityId}`);
@@ -125,12 +134,25 @@ export function OpportunityDetailPage() {
   }
 
   async function confirmApprove(kind: "first" | "final") {
+    if (kind === "first") {
+      if (!item) return;
+      try {
+        setHandlers(
+          await api<HandlerOption[]>(
+            `/reference/handlers?districtId=${item.district.id}&customerType=${item.customerType}`,
+          ),
+        );
+        setAction("firstApprove");
+      } catch (error) {
+        void message.error(
+          error instanceof Error ? error.message : "承接人加载失败",
+        );
+      }
+      return;
+    }
     modal.confirm({
-      title: kind === "first" ? "确认初审通过并分派？" : "确认终审通过并办结？",
-      content:
-        kind === "first"
-          ? "系统将按区县和客户类型分派默认承接人。"
-          : "办结后成功商机名称将冻结。",
+      title: "确认终审通过并办结？",
+      content: "办结后成功商机名称将冻结。",
       onOk: () =>
         run(`/opportunities/${opportunityId}/reviews/${kind}/approve`),
     });
@@ -160,6 +182,7 @@ export function OpportunityDetailPage() {
     failureReason?: string;
   }) {
     const paths: Record<Exclude<Action, null>, string> = {
+      firstApprove: "reviews/first/approve",
       firstReturn: "reviews/first/return",
       reassign: "assignments/reassign",
       pause: "pause",
@@ -348,6 +371,9 @@ export function OpportunityDetailPage() {
                   {event.actorName ?? "系统"}
                   {event.actorRole ? ` · ${roleLabels[event.actorRole]}` : ""}
                 </div>
+                {event.keyPersonName && (
+                  <div>关键承接人：{event.keyPersonName}</div>
+                )}
                 {event.note && (
                   <Typography.Paragraph style={{ margin: "4px 0" }}>
                     {event.note}
@@ -404,11 +430,11 @@ export function OpportunityDetailPage() {
               <Input.TextArea rows={4} maxLength={500} showCount />
             </Form.Item>
           )}
-          {action === "reassign" && (
+          {(action === "firstApprove" || action === "reassign") && (
             <>
               <Form.Item
                 name="handlerGrantId"
-                label="新承接人"
+                label={action === "firstApprove" ? "本次承接人" : "新承接人"}
                 rules={[{ required: true }]}
               >
                 <Select
@@ -418,13 +444,15 @@ export function OpportunityDetailPage() {
                   }))}
                 />
               </Form.Item>
-              <Form.Item
-                name="reason"
-                label="改派原因"
-                rules={[{ required: true, whitespace: true }, { max: 500 }]}
-              >
-                <Input.TextArea rows={3} maxLength={500} showCount />
-              </Form.Item>
+              {action === "reassign" && (
+                <Form.Item
+                  name="reason"
+                  label="改派原因"
+                  rules={[{ required: true, whitespace: true }, { max: 500 }]}
+                >
+                  <Input.TextArea rows={3} maxLength={500} showCount />
+                </Form.Item>
+              )}
             </>
           )}
           {action === "pause" && (
@@ -444,7 +472,7 @@ export function OpportunityDetailPage() {
             <Form.Item
               name="successOpportunityName"
               label="成功商机名称"
-              extra="请填写公司DICT系统项目名称"
+              extra={SUCCESS_NAME_HINT}
               rules={[{ required: true, whitespace: true }, { max: 200 }]}
             >
               <Input maxLength={200} showCount />
@@ -590,6 +618,7 @@ function actionTitle(action: Action): string {
     (
       {
         firstReturn: "退回上报人",
+        firstApprove: "初审通过并选择承接人",
         reassign: "调整承接人",
         pause: "暂缓处理",
         success: "填报成功商机",

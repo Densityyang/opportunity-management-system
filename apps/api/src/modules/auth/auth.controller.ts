@@ -44,7 +44,7 @@ export class AuthController {
 
   @Post("reauth")
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  @RequireRoles("MUNICIPAL")
+  @RequireRoles("MUNICIPAL", "SENIOR_MUNICIPAL_ADMIN")
   reauth(@CurrentIdentity() identity: AuthIdentity, @Body() dto: ReauthDto) {
     return this.auth.createReauthToken(identity, dto.password);
   }

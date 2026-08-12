@@ -14,6 +14,7 @@ enum RoleCode {
   PERSONAL_HANDLER
   ORGANIZATION_HANDLER
   MUNICIPAL
+  SENIOR_MUNICIPAL_ADMIN
   SYSTEM_ADMIN
 }
 
@@ -73,6 +74,21 @@ enum RetentionStatus {
   DISMISSED
 }
 
+enum PersonnelImportMode {
+  UPSERT
+  SNAPSHOT
+}
+
+enum PersonnelImportStatus {
+  APPLIED
+  FAILED
+}
+
+enum PersonnelSourceProfile {
+  FULL_DIRECTORY
+  CONTACT_ONLY
+}
+
 model User {
   id                 String              @id @default(uuid()) @db.Uuid
   phoneCiphertext    String              @map("phone_ciphertext")
@@ -93,6 +109,9 @@ model User {
   exportAudits       ExportAudit[]
   accessAudits       AccessAudit[]
   reauthTokens       ReauthToken[]
+  personnelId        String?             @unique @map("personnel_id") @db.Uuid
+  personnel          Personnel?          @relation(fields: [personnelId], references: [id], onDelete: SetNull)
+  personnelImports   PersonnelImport[]   @relation("PersonnelImportActor")
 
   @@map("users")
 }
@@ -104,6 +123,99 @@ model PasswordCredential {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("password_credentials")
+}
+
+model Personnel {
+  id                          String       @id @default(uuid()) @db.Uuid
+  personnelCode               String       @unique @map("personnel_code") @db.VarChar(40)
+  name                        String       @db.VarChar(80)
+  personalPhoneCiphertext     String?      @map("personal_phone_ciphertext")
+  personalPhoneIv             String?      @map("personal_phone_iv")
+  personalPhoneTag            String?      @map("personal_phone_tag")
+  personalPhoneBlindIndex     String?      @map("personal_phone_blind_index")
+  workPhoneCiphertext         String?      @map("work_phone_ciphertext")
+  workPhoneIv                 String?      @map("work_phone_iv")
+  workPhoneTag                String?      @map("work_phone_tag")
+  workPhoneBlindIndex         String?      @map("work_phone_blind_index")
+  organizationPath            String?      @map("organization_path") @db.VarChar(240)
+  firstLevelOrganization      String?      @map("first_level_organization") @db.VarChar(120)
+  secondLevelOrganization     String?      @map("second_level_organization") @db.VarChar(120)
+  thirdLevelOrganization      String?      @map("third_level_organization") @db.VarChar(120)
+  positionName                String?      @map("position_name") @db.VarChar(120)
+  businessLine                String?      @map("business_line") @db.VarChar(80)
+  positionCategory            String?      @map("position_category") @db.VarChar(80)
+  standardPosition            String?      @map("standard_position") @db.VarChar(120)
+  positionTags                String?      @map("position_tags") @db.VarChar(500)
+  employmentStatus            String?      @map("employment_status") @db.VarChar(80)
+  personnelType               String?      @map("personnel_type") @db.VarChar(100)
+  contractType                String?      @map("contract_type") @db.VarChar(100)
+  cooperativeEnterprise       String?      @map("cooperative_enterprise") @db.VarChar(160)
+  cooperativeEmploymentType   String?      @map("cooperative_employment_type") @db.VarChar(100)
+  cooperativeEmploymentSource String?      @map("cooperative_employment_source") @db.VarChar(100)
+  employmentManagement        String?      @map("employment_management") @db.VarChar(100)
+  compensationType            String?      @map("compensation_type") @db.VarChar(100)
+  settlementProject           String?      @map("settlement_project") @db.VarChar(160)
+  notes                       String?      @db.VarChar(500)
+  active                      Boolean      @default(true)
+  sourceProfile               PersonnelSourceProfile @default(FULL_DIRECTORY) @map("source_profile")
+  sourceFileName              String?      @map("source_file_name") @db.VarChar(240)
+  sourceRowNumber             Int?         @map("source_row_number")
+  lastSyncedAt                DateTime     @default(now()) @map("last_synced_at") @db.Timestamptz(3)
+  createdAt                   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user                        User?
+
+  @@index([name])
+  @@index([active, updatedAt(sort: Desc)])
+  @@index([personalPhoneBlindIndex])
+  @@index([workPhoneBlindIndex])
+  @@map("personnel")
+}
+
+model PersonnelPosition {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique @db.VarChar(40)
+  name      String   @unique @db.VarChar(120)
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  roleTemplates PositionRoleTemplate[]
+
+  @@map("personnel_positions")
+}
+
+model PositionRoleTemplate {
+  positionId String            @map("position_id") @db.Uuid
+  role       RoleCode
+  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  position   PersonnelPosition @relation(fields: [positionId], references: [id], onDelete: Cascade)
+
+  @@id([positionId, role])
+  @@index([role])
+  @@map("position_role_templates")
+}
+
+model PersonnelImport {
+  id              String               @id @default(uuid()) @db.Uuid
+  fileName        String               @map("file_name") @db.VarChar(240)
+  mode            PersonnelImportMode
+  status          PersonnelImportStatus @default(APPLIED)
+  sourceProfile   PersonnelSourceProfile @default(FULL_DIRECTORY) @map("source_profile")
+  totalRows       Int                  @map("total_rows")
+  createdRows     Int                  @map("created_rows")
+  updatedRows     Int                  @map("updated_rows")
+  deactivatedRows Int                  @map("deactivated_rows")
+  skippedRows     Int                  @map("skipped_rows")
+  accountsCreated Int                  @map("accounts_created")
+  accountsLinked  Int                  @map("accounts_linked")
+  warnings        Json?
+  actorUserId     String               @map("actor_user_id") @db.Uuid
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  completedAt     DateTime?            @map("completed_at") @db.Timestamptz(3)
+  actor           User                 @relation("PersonnelImportActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([createdAt(sort: Desc)])
+  @@map("personnel_imports")
 }
 
 model Session {
@@ -127,10 +239,10 @@ model District {
   code       String            @unique @db.VarChar(12)
   name       String            @unique @db.VarChar(40)
   enabled    Boolean           @default(true)
+  sortOrder  Int               @default(0) @map("sort_order")
   createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt  DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
   grants     RoleGrant[]
-  routing    DistrictRouting?
   opportunities Opportunity[]
 
   @@map("districts")
@@ -146,9 +258,6 @@ model RoleGrant {
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   district   District? @relation(fields: [districtId], references: [id], onDelete: Restrict)
-  managerRoutes       DistrictRouting[] @relation("ManagerRoute")
-  personalRoutes      DistrictRouting[] @relation("PersonalRoute")
-  organizationRoutes  DistrictRouting[] @relation("OrganizationRoute")
   assignments         Assignment[]
   submittedResults    HandlingResult[]
   notifications       Notification[]    @relation("NotificationGrant")
@@ -156,22 +265,6 @@ model RoleGrant {
   @@index([userId, active])
   @@index([role, districtId, active])
   @@map("role_grants")
-}
-
-model DistrictRouting {
-  id                        String    @id @default(uuid()) @db.Uuid
-  districtId                String    @unique @map("district_id") @db.Uuid
-  managerGrantId            String    @map("manager_grant_id") @db.Uuid
-  personalHandlerGrantId    String    @map("personal_handler_grant_id") @db.Uuid
-  organizationHandlerGrantId String   @map("organization_handler_grant_id") @db.Uuid
-  createdAt                 DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt                 DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
-  district                  District  @relation(fields: [districtId], references: [id], onDelete: Cascade)
-  manager                   RoleGrant @relation("ManagerRoute", fields: [managerGrantId], references: [id], onDelete: Restrict)
-  personalHandler           RoleGrant @relation("PersonalRoute", fields: [personalHandlerGrantId], references: [id], onDelete: Restrict)
-  organizationHandler       RoleGrant @relation("OrganizationRoute", fields: [organizationHandlerGrantId], references: [id], onDelete: Restrict)
-
-  @@map("district_routing")
 }
 
 model Opportunity {

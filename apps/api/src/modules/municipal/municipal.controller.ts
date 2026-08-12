@@ -20,7 +20,7 @@ import {
 } from "./municipal.dto";
 
 @ApiTags("municipal")
-@RequireRoles("MUNICIPAL")
+@RequireRoles("MUNICIPAL", "SENIOR_MUNICIPAL_ADMIN")
 @Controller("municipal")
 export class MunicipalController {
   constructor(private readonly municipal: MunicipalService) {}

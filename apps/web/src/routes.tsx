@@ -70,7 +70,7 @@ export function ApplicationRoutes() {
                 <Route
                   path="municipal/successes"
                   element={
-                    <RolePage roles={["MUNICIPAL"]}>
+                    <RolePage roles={["MUNICIPAL", "SENIOR_MUNICIPAL_ADMIN"]}>
                       <SuccessLibraryPage />
                     </RolePage>
                   }
@@ -78,7 +78,13 @@ export function ApplicationRoutes() {
                 <Route
                   path="admin"
                   element={
-                    <RolePage roles={["SYSTEM_ADMIN"]}>
+                    <RolePage
+                      roles={[
+                        "SYSTEM_ADMIN",
+                        "SENIOR_MUNICIPAL_ADMIN",
+                        "DISTRICT_MANAGER",
+                      ]}
+                    >
                       <AdminPage />
                     </RolePage>
                   }
@@ -106,7 +112,7 @@ function HomeRedirect() {
     );
   if (activeGrant.role === "MUNICIPAL")
     return <Navigate to="/municipal/successes" replace />;
-  if (activeGrant.role === "SYSTEM_ADMIN")
+  if (["SYSTEM_ADMIN", "SENIOR_MUNICIPAL_ADMIN"].includes(activeGrant.role))
     return <Navigate to="/admin" replace />;
   if (activeGrant.role === "FIELD_REPORTER")
     return <Navigate to="/report/new" replace />;

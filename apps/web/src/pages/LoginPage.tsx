@@ -67,11 +67,16 @@ export function LoginPage() {
           <Form.Item
             name="password"
             label="密码"
-            rules={[{ required: true, message: "请输入密码" }]}
+            rules={[
+              { required: true, message: "请输入密码" },
+              { min: 6 },
+              { max: 12 },
+            ]}
           >
             <Input.Password
               prefix={<LockOutlined />}
               autoComplete="current-password"
+              maxLength={12}
             />
           </Form.Item>
           <Button type="primary" htmlType="submit" block>

@@ -6,6 +6,7 @@ import {
 } from "@nestjs/common";
 import { PgBoss } from "pg-boss";
 import { PrismaService } from "../../common/prisma.service";
+import type { Prisma } from "../../generated/prisma/client";
 import { AudioService } from "../audio/audio.service";
 import { WorkflowService } from "../workflow/workflow.service";
 
@@ -156,15 +157,7 @@ export class JobWorkerService implements OnModuleInit, OnModuleDestroy {
     await this.prisma.$transaction(async (tx) => {
       const round = await tx.slaRound.findUnique({
         where: { id: slaRoundId },
-        include: {
-          opportunity: {
-            include: {
-              district: {
-                include: { routing: { include: { manager: true } } },
-              },
-            },
-          },
-        },
+        include: { opportunity: true },
       });
       if (
         !round ||
@@ -173,19 +166,14 @@ export class JobWorkerService implements OnModuleInit, OnModuleDestroy {
         round.reminderAt > new Date()
       )
         return;
-      const manager = round.opportunity.district.routing?.manager;
-      if (manager?.active) {
-        await tx.notification.create({
-          data: {
-            recipientUserId: manager.userId,
-            recipientGrantId: manager.id,
-            opportunityId: round.opportunityId,
-            type: "SLA_HALF_REMINDER",
-            title: "审批时限已过半",
-            body: `${round.opportunity.serialNumber} 的${round.kind === "FIRST_REVIEW" ? "初审" : "终审"}时限已过半。`,
-          },
-        });
-      }
+      await this.notifyDistrictManagers(
+        tx,
+        round.opportunity.districtId,
+        round.opportunityId,
+        "SLA_HALF_REMINDER",
+        "审批时限已过半",
+        `${round.opportunity.serialNumber} 的${round.kind === "FIRST_REVIEW" ? "初审" : "终审"}时限已过半。`,
+      );
       await tx.slaRound.update({
         where: { id: round.id },
         data: { reminderSentAt: new Date() },
@@ -197,15 +185,7 @@ export class JobWorkerService implements OnModuleInit, OnModuleDestroy {
     await this.prisma.$transaction(async (tx) => {
       const round = await tx.slaRound.findUnique({
         where: { id: slaRoundId },
-        include: {
-          opportunity: {
-            include: {
-              district: {
-                include: { routing: { include: { manager: true } } },
-              },
-            },
-          },
-        },
+        include: { opportunity: true },
       });
       if (
         !round ||
@@ -214,19 +194,14 @@ export class JobWorkerService implements OnModuleInit, OnModuleDestroy {
         round.deadlineAt > new Date()
       )
         return;
-      const manager = round.opportunity.district.routing?.manager;
-      if (manager?.active) {
-        await tx.notification.create({
-          data: {
-            recipientUserId: manager.userId,
-            recipientGrantId: manager.id,
-            opportunityId: round.opportunityId,
-            type: "SLA_OVERDUE",
-            title: "审批已超时",
-            body: `${round.opportunity.serialNumber} 已超过${round.kind === "FIRST_REVIEW" ? "24" : "48"}小时审批时限，请尽快处理。`,
-          },
-        });
-      }
+      await this.notifyDistrictManagers(
+        tx,
+        round.opportunity.districtId,
+        round.opportunityId,
+        "SLA_OVERDUE",
+        "审批已超时",
+        `${round.opportunity.serialNumber} 已超过${round.kind === "FIRST_REVIEW" ? "24" : "48"}小时审批时限，请尽快处理。`,
+      );
       await tx.notification.create({
         data: {
           recipientUserId: round.opportunity.reporterId,
@@ -240,6 +215,39 @@ export class JobWorkerService implements OnModuleInit, OnModuleDestroy {
         where: { id: round.id },
         data: { overdueMarkedAt: new Date() },
       });
+    });
+  }
+
+  private async notifyDistrictManagers(
+    tx: Prisma.TransactionClient,
+    districtId: string,
+    opportunityId: string,
+    type: string,
+    title: string,
+    body: string,
+  ): Promise<void> {
+    const grants = await tx.roleGrant.findMany({
+      where: {
+        districtId,
+        role: "DISTRICT_MANAGER",
+        active: true,
+        user: { active: true },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    const managers = [
+      ...new Map(grants.map((grant) => [grant.userId, grant])).values(),
+    ];
+    if (!managers.length) return;
+    await tx.notification.createMany({
+      data: managers.map((grant) => ({
+        recipientUserId: grant.userId,
+        recipientGrantId: grant.id,
+        opportunityId,
+        type,
+        title,
+        body,
+      })),
     });
   }
 
