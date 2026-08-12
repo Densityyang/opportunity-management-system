@@ -1,0 +1,12 @@
+.git
+node_modules
+**/node_modules
+**/dist
+coverage
+outputs
+work
+storage
+backups
+*.log
+*.tsbuildinfo
+**/*.tsbuildinfo

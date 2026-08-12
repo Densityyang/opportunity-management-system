@@ -1,0 +1,535 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RoleCode {
+  FIELD_REPORTER
+  DISTRICT_MANAGER
+  PERSONAL_HANDLER
+  ORGANIZATION_HANDLER
+  MUNICIPAL
+  SENIOR_MUNICIPAL_ADMIN
+  SYSTEM_ADMIN
+}
+
+enum CustomerType {
+  PERSONAL
+  ORGANIZATION
+}
+
+enum CustomerAttitude {
+  URGENT
+  IMPORTANT
+  GENERAL
+  POTENTIAL
+}
+
+enum OpportunityState {
+  PENDING_FIRST_REVIEW
+  RETURNED_TO_REPORTER
+  HANDLING
+  PAUSED
+  PENDING_FINAL_REVIEW
+  RETURNED_TO_HANDLER
+  CLOSED_SUCCESS
+  CLOSED_FAILURE
+}
+
+enum ResultKind {
+  SUCCESS
+  FAILURE
+}
+
+enum SlaKind {
+  FIRST_REVIEW
+  FINAL_REVIEW
+}
+
+enum SlaStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum AudioStatus {
+  ACTIVE
+  DELETED
+}
+
+enum RetentionAction {
+  ANONYMIZE
+  DELETE
+}
+
+enum RetentionStatus {
+  PENDING
+  APPROVED
+  COMPLETED
+  DISMISSED
+}
+
+enum PersonnelImportMode {
+  UPSERT
+  SNAPSHOT
+}
+
+enum PersonnelImportStatus {
+  APPLIED
+  FAILED
+}
+
+enum PersonnelSourceProfile {
+  FULL_DIRECTORY
+  CONTACT_ONLY
+}
+
+model User {
+  id                 String              @id @default(uuid()) @db.Uuid
+  phoneCiphertext    String              @map("phone_ciphertext")
+  phoneIv            String              @map("phone_iv")
+  phoneTag           String              @map("phone_tag")
+  phoneBlindIndex    String              @unique @map("phone_blind_index")
+  displayName        String              @map("display_name") @db.VarChar(80)
+  active             Boolean             @default(true)
+  mustChangePassword Boolean             @default(true) @map("must_change_password")
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  credential         PasswordCredential?
+  sessions           Session[]
+  grants             RoleGrant[]
+  reportedItems      Opportunity[]       @relation("Reporter")
+  workflowEvents     WorkflowEvent[]     @relation("WorkflowActor")
+  notifications      Notification[]
+  exportAudits       ExportAudit[]
+  accessAudits       AccessAudit[]
+  reauthTokens       ReauthToken[]
+  personnelId        String?             @unique @map("personnel_id") @db.Uuid
+  personnel          Personnel?          @relation(fields: [personnelId], references: [id], onDelete: SetNull)
+  personnelImports   PersonnelImport[]   @relation("PersonnelImportActor")
+
+  @@map("users")
+}
+
+model PasswordCredential {
+  userId       String   @id @map("user_id") @db.Uuid
+  passwordHash String   @map("password_hash")
+  changedAt    DateTime @default(now()) @map("changed_at") @db.Timestamptz(3)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_credentials")
+}
+
+model Personnel {
+  id                          String       @id @default(uuid()) @db.Uuid
+  personnelCode               String       @unique @map("personnel_code") @db.VarChar(40)
+  name                        String       @db.VarChar(80)
+  personalPhoneCiphertext     String?      @map("personal_phone_ciphertext")
+  personalPhoneIv             String?      @map("personal_phone_iv")
+  personalPhoneTag            String?      @map("personal_phone_tag")
+  personalPhoneBlindIndex     String?      @map("personal_phone_blind_index")
+  workPhoneCiphertext         String?      @map("work_phone_ciphertext")
+  workPhoneIv                 String?      @map("work_phone_iv")
+  workPhoneTag                String?      @map("work_phone_tag")
+  workPhoneBlindIndex         String?      @map("work_phone_blind_index")
+  organizationPath            String?      @map("organization_path") @db.VarChar(240)
+  firstLevelOrganization      String?      @map("first_level_organization") @db.VarChar(120)
+  secondLevelOrganization     String?      @map("second_level_organization") @db.VarChar(120)
+  thirdLevelOrganization      String?      @map("third_level_organization") @db.VarChar(120)
+  positionName                String?      @map("position_name") @db.VarChar(120)
+  businessLine                String?      @map("business_line") @db.VarChar(80)
+  positionCategory            String?      @map("position_category") @db.VarChar(80)
+  standardPosition            String?      @map("standard_position") @db.VarChar(120)
+  positionTags                String?      @map("position_tags") @db.VarChar(500)
+  employmentStatus            String?      @map("employment_status") @db.VarChar(80)
+  personnelType               String?      @map("personnel_type") @db.VarChar(100)
+  contractType                String?      @map("contract_type") @db.VarChar(100)
+  cooperativeEnterprise       String?      @map("cooperative_enterprise") @db.VarChar(160)
+  cooperativeEmploymentType   String?      @map("cooperative_employment_type") @db.VarChar(100)
+  cooperativeEmploymentSource String?      @map("cooperative_employment_source") @db.VarChar(100)
+  employmentManagement        String?      @map("employment_management") @db.VarChar(100)
+  compensationType            String?      @map("compensation_type") @db.VarChar(100)
+  settlementProject           String?      @map("settlement_project") @db.VarChar(160)
+  notes                       String?      @db.VarChar(500)
+  active                      Boolean      @default(true)
+  sourceProfile               PersonnelSourceProfile @default(FULL_DIRECTORY) @map("source_profile")
+  sourceFileName              String?      @map("source_file_name") @db.VarChar(240)
+  sourceRowNumber             Int?         @map("source_row_number")
+  lastSyncedAt                DateTime     @default(now()) @map("last_synced_at") @db.Timestamptz(3)
+  createdAt                   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user                        User?
+
+  @@index([name])
+  @@index([active, updatedAt(sort: Desc)])
+  @@index([personalPhoneBlindIndex])
+  @@index([workPhoneBlindIndex])
+  @@map("personnel")
+}
+
+model PersonnelPosition {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique @db.VarChar(40)
+  name      String   @unique @db.VarChar(120)
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  roleTemplates PositionRoleTemplate[]
+
+  @@map("personnel_positions")
+}
+
+model PositionRoleTemplate {
+  positionId String            @map("position_id") @db.Uuid
+  role       RoleCode
+  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  position   PersonnelPosition @relation(fields: [positionId], references: [id], onDelete: Cascade)
+
+  @@id([positionId, role])
+  @@index([role])
+  @@map("position_role_templates")
+}
+
+model PersonnelImport {
+  id              String               @id @default(uuid()) @db.Uuid
+  fileName        String               @map("file_name") @db.VarChar(240)
+  mode            PersonnelImportMode
+  status          PersonnelImportStatus @default(APPLIED)
+  sourceProfile   PersonnelSourceProfile @default(FULL_DIRECTORY) @map("source_profile")
+  totalRows       Int                  @map("total_rows")
+  createdRows     Int                  @map("created_rows")
+  updatedRows     Int                  @map("updated_rows")
+  deactivatedRows Int                  @map("deactivated_rows")
+  skippedRows     Int                  @map("skipped_rows")
+  accountsCreated Int                  @map("accounts_created")
+  accountsLinked  Int                  @map("accounts_linked")
+  warnings        Json?
+  actorUserId     String               @map("actor_user_id") @db.Uuid
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  completedAt     DateTime?            @map("completed_at") @db.Timestamptz(3)
+  actor           User                 @relation("PersonnelImportActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([createdAt(sort: Desc)])
+  @@map("personnel_imports")
+}
+
+model Session {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  tokenHash  String   @unique @map("token_hash")
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(3)
+  lastSeenAt DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  userAgent  String?  @map("user_agent") @db.VarChar(500)
+  ipAddress  String?  @map("ip_address") @db.VarChar(64)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("sessions")
+}
+
+model District {
+  id         String            @id @default(uuid()) @db.Uuid
+  code       String            @unique @db.VarChar(12)
+  name       String            @unique @db.VarChar(40)
+  enabled    Boolean           @default(true)
+  sortOrder  Int               @default(0) @map("sort_order")
+  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+  grants     RoleGrant[]
+  opportunities Opportunity[]
+
+  @@map("districts")
+}
+
+model RoleGrant {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  role       RoleCode
+  districtId String?   @map("district_id") @db.Uuid
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  district   District? @relation(fields: [districtId], references: [id], onDelete: Restrict)
+  assignments         Assignment[]
+  submittedResults    HandlingResult[]
+  notifications       Notification[]    @relation("NotificationGrant")
+
+  @@index([userId, active])
+  @@index([role, districtId, active])
+  @@map("role_grants")
+}
+
+model Opportunity {
+  id                    String              @id @default(uuid()) @db.Uuid
+  serialNumber          String              @unique @map("serial_number") @db.VarChar(32)
+  reporterId            String              @map("reporter_id") @db.Uuid
+  districtId            String              @map("district_id") @db.Uuid
+  customerType          CustomerType        @map("customer_type")
+  attitude              CustomerAttitude
+  state                 OpportunityState
+  version               Int                 @default(1)
+  reporterPhoneCiphertext String            @map("reporter_phone_ciphertext")
+  reporterPhoneIv       String              @map("reporter_phone_iv")
+  reporterPhoneTag      String              @map("reporter_phone_tag")
+  customerContactCiphertext String          @map("customer_contact_ciphertext")
+  customerContactIv     String              @map("customer_contact_iv")
+  customerContactTag    String              @map("customer_contact_tag")
+  customerContactBlindIndex String          @map("customer_contact_blind_index")
+  specificNeedCiphertext String             @map("specific_need_ciphertext")
+  specificNeedIv        String              @map("specific_need_iv")
+  specificNeedTag       String              @map("specific_need_tag")
+  descriptionCiphertext String?             @map("description_ciphertext")
+  descriptionIv        String?              @map("description_iv")
+  descriptionTag       String?              @map("description_tag")
+  consentAt             DateTime            @map("consent_at") @db.Timestamptz(3)
+  submittedAt           DateTime            @map("submitted_at") @db.Timestamptz(3)
+  pausedUntil           DateTime?           @map("paused_until") @db.Timestamptz(3)
+  closedAt              DateTime?           @map("closed_at") @db.Timestamptz(3)
+  createdAt             DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  reporter              User                @relation("Reporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  district              District            @relation(fields: [districtId], references: [id], onDelete: Restrict)
+  revisions             OpportunityRevision[]
+  assignments           Assignment[]
+  result                HandlingResult?
+  workflowEvents        WorkflowEvent[]
+  slaRounds             SlaRound[]
+  notifications         Notification[]
+  audio                 AudioRecord?
+  retentionCandidate    RetentionCandidate?
+
+  @@index([reporterId, submittedAt(sort: Desc)])
+  @@index([districtId, state, updatedAt(sort: Desc)])
+  @@index([state, closedAt(sort: Desc)])
+  @@index([customerContactBlindIndex])
+  @@map("opportunities")
+}
+
+model OpportunityRevision {
+  id              String       @id @default(uuid()) @db.Uuid
+  opportunityId   String       @map("opportunity_id") @db.Uuid
+  revisionNumber  Int          @map("revision_number")
+  snapshot        Json
+  submittedById   String       @map("submitted_by_id") @db.Uuid
+  submittedAt     DateTime     @default(now()) @map("submitted_at") @db.Timestamptz(3)
+  opportunity     Opportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@unique([opportunityId, revisionNumber])
+  @@map("opportunity_revisions")
+}
+
+model Assignment {
+  id              String       @id @default(uuid()) @db.Uuid
+  opportunityId   String       @map("opportunity_id") @db.Uuid
+  handlerGrantId  String       @map("handler_grant_id") @db.Uuid
+  assignedById    String       @map("assigned_by_id") @db.Uuid
+  reasonCiphertext String?     @map("reason_ciphertext")
+  reasonIv        String?      @map("reason_iv")
+  reasonTag       String?      @map("reason_tag")
+  active          Boolean      @default(true)
+  assignedAt      DateTime     @default(now()) @map("assigned_at") @db.Timestamptz(3)
+  endedAt         DateTime?    @map("ended_at") @db.Timestamptz(3)
+  opportunity     Opportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  handlerGrant    RoleGrant    @relation(fields: [handlerGrantId], references: [id], onDelete: Restrict)
+
+  @@index([opportunityId, active])
+  @@index([handlerGrantId, active])
+  @@map("assignments")
+}
+
+model HandlingResult {
+  id                         String       @id @default(uuid()) @db.Uuid
+  opportunityId              String       @unique @map("opportunity_id") @db.Uuid
+  kind                       ResultKind
+  successNameCiphertext      String?      @map("success_name_ciphertext")
+  successNameIv              String?      @map("success_name_iv")
+  successNameTag             String?      @map("success_name_tag")
+  successNameSearchTokens    String[]     @default([]) @map("success_name_search_tokens")
+  failureReasonCiphertext    String?      @map("failure_reason_ciphertext")
+  failureReasonIv            String?      @map("failure_reason_iv")
+  failureReasonTag           String?      @map("failure_reason_tag")
+  submittedByGrantId         String       @map("submitted_by_grant_id") @db.Uuid
+  submittedAt                DateTime     @map("submitted_at") @db.Timestamptz(3)
+  finalApprovedAt            DateTime?    @map("final_approved_at") @db.Timestamptz(3)
+  opportunity                Opportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  submittedByGrant           RoleGrant    @relation(fields: [submittedByGrantId], references: [id], onDelete: Restrict)
+
+  @@index([kind, submittedAt(sort: Desc)])
+  @@index([successNameSearchTokens], type: Gin)
+  @@map("handling_results")
+}
+
+model WorkflowEvent {
+  id              String            @id @default(uuid()) @db.Uuid
+  opportunityId   String            @map("opportunity_id") @db.Uuid
+  eventType       String            @map("event_type") @db.VarChar(80)
+  fromState       OpportunityState? @map("from_state")
+  toState         OpportunityState  @map("to_state")
+  actorUserId     String?           @map("actor_user_id") @db.Uuid
+  actorGrantId    String?           @map("actor_grant_id") @db.Uuid
+  actorRole       RoleCode?         @map("actor_role")
+  noteCiphertext  String?           @map("note_ciphertext")
+  noteIv          String?           @map("note_iv")
+  noteTag         String?           @map("note_tag")
+  metadata        Json?
+  occurredAt      DateTime          @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  opportunity     Opportunity      @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  actor            User?            @relation("WorkflowActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([opportunityId, occurredAt])
+  @@map("workflow_events")
+}
+
+model SlaRound {
+  id               String       @id @default(uuid()) @db.Uuid
+  opportunityId    String       @map("opportunity_id") @db.Uuid
+  kind             SlaKind
+  roundNumber      Int          @map("round_number")
+  status           SlaStatus    @default(ACTIVE)
+  startedAt        DateTime     @map("started_at") @db.Timestamptz(3)
+  reminderAt       DateTime     @map("reminder_at") @db.Timestamptz(3)
+  deadlineAt       DateTime     @map("deadline_at") @db.Timestamptz(3)
+  reminderSentAt   DateTime?    @map("reminder_sent_at") @db.Timestamptz(3)
+  overdueMarkedAt  DateTime?    @map("overdue_marked_at") @db.Timestamptz(3)
+  completedAt      DateTime?    @map("completed_at") @db.Timestamptz(3)
+  opportunity      Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@unique([opportunityId, kind, roundNumber])
+  @@index([status, reminderAt])
+  @@index([status, deadlineAt])
+  @@map("sla_rounds")
+}
+
+model Notification {
+  id                String       @id @default(uuid()) @db.Uuid
+  recipientUserId   String       @map("recipient_user_id") @db.Uuid
+  recipientGrantId  String?      @map("recipient_grant_id") @db.Uuid
+  opportunityId     String?      @map("opportunity_id") @db.Uuid
+  type              String       @db.VarChar(80)
+  title             String       @db.VarChar(160)
+  body              String       @db.VarChar(500)
+  readAt            DateTime?    @map("read_at") @db.Timestamptz(3)
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  recipient         User         @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
+  recipientGrant    RoleGrant?   @relation("NotificationGrant", fields: [recipientGrantId], references: [id], onDelete: SetNull)
+  opportunity       Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@index([recipientUserId, readAt, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+model AudioRecord {
+  id              String       @id @default(uuid()) @db.Uuid
+  opportunityId   String       @unique @map("opportunity_id") @db.Uuid
+  storageKey      String       @unique @map("storage_key")
+  encryptionIv    String       @map("encryption_iv")
+  encryptionTag   String       @map("encryption_tag")
+  mimeType        String       @map("mime_type") @db.VarChar(100)
+  sizeBytes       Int          @map("size_bytes")
+  durationMs      Int          @map("duration_ms")
+  sha256          String
+  status          AudioStatus  @default(ACTIVE)
+  deleteAfter     DateTime?    @map("delete_after") @db.Timestamptz(3)
+  deletedAt       DateTime?    @map("deleted_at") @db.Timestamptz(3)
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  opportunity     Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@index([status, deleteAfter])
+  @@map("audio_records")
+}
+
+model IdempotencyRecord {
+  id             String   @id @default(uuid()) @db.Uuid
+  scope          String   @db.VarChar(120)
+  key            String   @db.VarChar(160)
+  requestHash    String   @map("request_hash")
+  responseStatus Int      @map("response_status")
+  responseBody   Json     @map("response_body")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt      DateTime @map("expires_at") @db.Timestamptz(3)
+
+  @@unique([scope, key])
+  @@index([expiresAt])
+  @@map("idempotency_records")
+}
+
+model OutboxEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  type        String   @db.VarChar(100)
+  aggregateId String   @map("aggregate_id") @db.Uuid
+  payload     Json
+  availableAt DateTime @default(now()) @map("available_at") @db.Timestamptz(3)
+  processedAt DateTime? @map("processed_at") @db.Timestamptz(3)
+  attempts    Int      @default(0)
+  lastError   String?  @map("last_error") @db.VarChar(1000)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([processedAt, availableAt])
+  @@map("outbox_events")
+}
+
+model ReauthToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("reauth_tokens")
+}
+
+model ExportAudit {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  exportType      String   @map("export_type") @db.VarChar(80)
+  filters         Json
+  rowCount        Int      @map("row_count")
+  startedAt       DateTime @map("started_at") @db.Timestamptz(3)
+  completedAt     DateTime? @map("completed_at") @db.Timestamptz(3)
+  success         Boolean  @default(false)
+  errorCode       String?  @map("error_code") @db.VarChar(80)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, startedAt(sort: Desc)])
+  @@map("export_audits")
+}
+
+model AccessAudit {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  opportunityId String?  @map("opportunity_id") @db.Uuid
+  action        String   @db.VarChar(80)
+  metadata      Json?
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([opportunityId, createdAt(sort: Desc)])
+  @@map("access_audits")
+}
+
+model RetentionCandidate {
+  id              String          @id @default(uuid()) @db.Uuid
+  opportunityId   String          @unique @map("opportunity_id") @db.Uuid
+  eligibleAt      DateTime        @map("eligible_at") @db.Timestamptz(3)
+  suggestedAction RetentionAction @map("suggested_action")
+  status          RetentionStatus @default(PENDING)
+  reviewedById    String?         @map("reviewed_by_id") @db.Uuid
+  reviewedAt      DateTime?       @map("reviewed_at") @db.Timestamptz(3)
+  completedAt     DateTime?       @map("completed_at") @db.Timestamptz(3)
+  opportunity     Opportunity     @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@index([status, eligibleAt])
+  @@map("retention_candidates")
+}
