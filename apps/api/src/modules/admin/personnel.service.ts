@@ -19,6 +19,7 @@ import {
   type EncryptedValue,
 } from "../../common/crypto.service";
 import { notFound } from "../../common/http-error";
+import { initialPasswordFromPhone } from "../../common/initial-password";
 import { PrismaService } from "../../common/prisma.service";
 import {
   PersonnelImportMode,
@@ -30,7 +31,6 @@ import {
 import { AdministrationPolicyService } from "./admin-policy.service";
 import {
   CreatePersonnelAccountDto,
-  InitialPasswordModeDto,
   PersonnelImportDto,
   PersonnelImportModeDto,
   PersonnelListQueryDto,
@@ -162,11 +162,6 @@ export class PersonnelService {
         message: "请上传人员基础信息 XLSX 文件",
         errorCode: "PERSONNEL_FILE_REQUIRED",
       });
-    if (dto.createAccounts && !dto.initialPassword)
-      throw new BadRequestException({
-        message: "批量创建普通账号时必须提供 6 至 12 位初始密码",
-        errorCode: "PERSONNEL_ACCOUNT_PASSWORD_REQUIRED",
-      });
     if (
       dto.createAccounts &&
       (dto.provisionSystemAdminCount > 0 || dto.provisionSystemAdminPhone)
@@ -213,9 +208,7 @@ export class PersonnelService {
       };
     }
 
-    const generalPasswordHash = dto.createAccounts
-      ? await argon2.hash(dto.initialPassword!, { type: argon2.argon2id })
-      : null;
+    const ordinaryPasswordHashes = new Map<string, string>();
     const counters: ImportCounters = {
       createdRows: 0,
       updatedRows: 0,
@@ -278,15 +271,23 @@ export class PersonnelService {
                 identity,
               );
             } else if (
-              generalPasswordHash ||
+              dto.createAccounts ||
               existingUserPhones.has(this.crypto.blindIndex(accountPhone))
             ) {
+              const ordinaryPasswordHash =
+                dto.createAccounts &&
+                !existingUserPhones.has(this.crypto.blindIndex(accountPhone))
+                  ? await this.passwordHashForPhone(
+                      accountPhone,
+                      ordinaryPasswordHashes,
+                    )
+                  : null;
               await this.linkOrCreateOrdinaryAccount(
                 tx,
                 id,
                 row,
                 accountPhone,
-                generalPasswordHash,
+                ordinaryPasswordHash,
                 counters,
                 warnings,
               );
@@ -538,16 +539,9 @@ export class PersonnelService {
         message: "该人员没有可用的个人或工作手机号码",
         errorCode: "PERSONNEL_PHONE_REQUIRED",
       });
-    const password =
-      dto.passwordMode === InitialPasswordModeDto.EXPLICIT
-        ? dto.initialPassword
-        : phone.slice(-6);
-    if (!password || password.length < 6 || password.length > 12)
-      throw new BadRequestException({
-        message: "显式初始密码须为 6 至 12 位",
-        errorCode: "PERSONNEL_ACCOUNT_PASSWORD_REQUIRED",
-      });
-    const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
+    const passwordHash = await argon2.hash(initialPasswordFromPhone(phone), {
+      type: argon2.argon2id,
+    });
     const phoneBlindIndex = this.crypto.blindIndex(phone);
 
     return this.prisma.$transaction(async (tx) => {
@@ -734,7 +728,9 @@ export class PersonnelService {
       });
     const passwordHash =
       !user || !user.credential
-        ? await argon2.hash(phone.slice(-6), { type: argon2.argon2id })
+        ? await argon2.hash(initialPasswordFromPhone(phone), {
+            type: argon2.argon2id,
+          })
         : null;
     if (!user) {
       const encrypted = this.crypto.encrypt(phone);
@@ -832,6 +828,19 @@ export class PersonnelService {
       },
     });
     counters.accountsCreated += 1;
+  }
+
+  private async passwordHashForPhone(
+    phone: string,
+    cache: Map<string, string>,
+  ): Promise<string> {
+    const normalizedPhone = phone.trim();
+    const password = initialPasswordFromPhone(normalizedPhone);
+    const cached = cache.get(normalizedPhone);
+    if (cached) return cached;
+    const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
+    cache.set(normalizedPhone, passwordHash);
+    return passwordHash;
   }
 
   private async parseWorkbook(buffer: Buffer): Promise<{

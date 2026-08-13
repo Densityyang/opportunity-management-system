@@ -92,7 +92,6 @@ export function AdminPage() {
   const [retentionItem, setRetentionItem] = useState<RetentionRow | null>(null);
   const [createForm] = Form.useForm();
   const [grantForm] = Form.useForm();
-  const [resetForm] = Form.useForm();
   const [retentionForm] = Form.useForm();
   const createRole = Form.useWatch<RoleCode>("role", createForm);
   const grantRole = Form.useWatch<RoleCode>("role", grantForm);
@@ -161,7 +160,6 @@ export function AdminPage() {
   async function createUser(values: {
     phone: string;
     displayName: string;
-    initialPassword: string;
     role: RoleCode;
     districtId?: string;
   }): Promise<void> {
@@ -171,7 +169,6 @@ export function AdminPage() {
         body: JSON.stringify({
           phone: values.phone,
           displayName: values.displayName,
-          initialPassword: values.initialPassword,
           grants: [grantPayload(values.role, values.districtId)],
         }),
       });
@@ -225,17 +222,14 @@ export function AdminPage() {
     }
   }
 
-  async function resetPassword(values: {
-    initialPassword: string;
-  }): Promise<void> {
+  async function resetPassword(): Promise<void> {
     if (!resetUser) return;
     try {
       await api(`/admin/users/${resetUser.id}/reset-password`, {
         method: "POST",
-        body: JSON.stringify(values),
+        body: JSON.stringify({}),
       });
       setResetUser(null);
-      resetForm.resetFields();
       void message.success("密码已重置，用户下次登录必须修改");
     } catch (error) {
       void message.error(error instanceof Error ? error.message : "重置失败");
@@ -618,14 +612,11 @@ export function AdminPage() {
           >
             <Input maxLength={80} />
           </Form.Item>
-          <Form.Item
-            name="initialPassword"
-            label="初始密码"
-            extra="仅限定 6 至 12 位；首次登录必须修改。"
-            rules={[{ required: true }, { min: 6 }, { max: 12 }]}
-          >
-            <Input.Password maxLength={12} />
-          </Form.Item>
+          <Alert
+            type="info"
+            showIcon
+            message="初始密码自动设置为手机号后六位，首次登录必须修改。"
+          />
           <GrantFields
             roleOptions={roleOptions}
             districts={enabledDistricts}
@@ -664,26 +655,15 @@ export function AdminPage() {
         title={`重置 ${resetUser?.displayName ?? "账号"} 的密码`}
         okText="确认重置"
         cancelText="取消"
-        onOk={() => resetForm.submit()}
+        onOk={() => void resetPassword()}
         onCancel={() => {
           setResetUser(null);
-          resetForm.resetFields();
         }}
         destroyOnClose
       >
-        <Form
-          form={resetForm}
-          layout="vertical"
-          onFinish={(values) => void resetPassword(values)}
-        >
-          <Form.Item
-            name="initialPassword"
-            label="新初始密码"
-            rules={[{ required: true }, { min: 6 }, { max: 12 }]}
-          >
-            <Input.Password maxLength={12} />
-          </Form.Item>
-        </Form>
+        <Typography.Paragraph>
+          重置后密码为该账号手机号后六位，且用户下次登录必须修改密码。
+        </Typography.Paragraph>
       </Modal>
 
       <Modal

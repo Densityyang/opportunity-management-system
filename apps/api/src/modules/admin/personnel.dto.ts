@@ -22,11 +22,6 @@ export enum PersonnelImportModeDto {
   SNAPSHOT = "SNAPSHOT",
 }
 
-export enum InitialPasswordModeDto {
-  EXPLICIT = "EXPLICIT",
-  PHONE_LAST_6 = "PHONE_LAST_6",
-}
-
 const booleanValue = ({ value }: { value: unknown }) =>
   value === true || value === "true"
     ? true
@@ -48,11 +43,6 @@ export class PersonnelImportDto {
   @Transform(booleanValue)
   @IsBoolean()
   createAccounts = false;
-
-  @IsOptional()
-  @IsString()
-  @Length(6, 12, { message: "批量创建账号的初始密码须为 6 至 12 位" })
-  initialPassword?: string;
 
   @IsOptional()
   @Type(() => Number)
@@ -124,15 +114,6 @@ export class UpdatePersonnelPositionDto {
 }
 
 export class CreatePersonnelAccountDto {
-  @IsOptional()
-  @IsEnum(InitialPasswordModeDto)
-  passwordMode: InitialPasswordModeDto = InitialPasswordModeDto.PHONE_LAST_6;
-
-  @IsOptional()
-  @IsString()
-  @Length(6, 12, { message: "初始密码须为 6 至 12 位" })
-  initialPassword?: string;
-
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })

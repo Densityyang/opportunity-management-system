@@ -8,7 +8,7 @@
 - 状态变更：必须携带 `Idempotency-Key`，正文携带 `expectedVersion`。
 - 校验：全局字段白名单并拒绝未知字段；错误为 `application/problem+json`。
 - 并发：版本冲突为 `409 VERSION_CONFLICT`；非法状态为 `422 INVALID_TRANSITION`。
-- 密码：登录、改密、重置和导出复核统一限定为 6–12 位，不再附加大小写或数字组合要求。
+- 密码：登录、改密和导出复核限定为 6–12 位；新建账号和管理员重置统一使用手机号后六位，并强制首次改密。
 
 ## 认证与配置
 
@@ -23,7 +23,7 @@
 | GET            | `/admin/users`                                     | 分页账号列表；支持 `search`、`role`、`districtId`、`active`，服务端强制套用层级可见域 |
 | POST           | `/admin/users`                                     | 在同一事务创建账号及至少一个首批角色授权                                              |
 | PATCH          | `/admin/users/{id}`                                | 系统/高级市公司管理员修改姓名或全局启停账号                                           |
-| POST           | `/admin/users/{id}/reset-password`                 | 系统/高级市公司管理员重置为 6–12 位并撤销旧会话                                       |
+| POST           | `/admin/users/{id}/reset-password`                 | 系统/高级市公司管理员重置为手机号后六位并撤销旧会话                                   |
 | POST/DELETE    | `/admin/users/{id}/grants`、`/admin/grants/{id}`   | 在当前管理范围内增加/停用授权；授权变化立即影响承接覆盖                               |
 | GET/PATCH      | `/admin/districts`、`/admin/districts/{id}`        | 当前范围的区县覆盖统计；仅系统管理员可启停区县                                        |
 | GET/POST/PATCH | `/admin/personnel…`、`/admin/personnel-positions…` | 人员目录、职务建议模板和人工账号关联                                                  |
@@ -38,7 +38,6 @@
 {
   "phone": "13800000000",
   "displayName": "示例人员",
-  "initialPassword": "123456",
   "grants": [
     {
       "role": "PERSONAL_HANDLER",
@@ -76,14 +75,13 @@
 | --------------------------- | ----------------------------- | -------------------------------------------------------------------- |
 | `mode`                      | `UPSERT`（默认）或 `SNAPSHOT` | 快照只停用同一来源类型中缺失的人员；账号和角色须人工复核，不自动停用 |
 | `dryRun`                    | `false`                       | `true` 时只返回计数、来源识别和告警，不写业务表                      |
-| `createAccounts`            | `false`                       | 为普通目录中具有有效手机号的人员建号；需同时提供 `initialPassword`   |
-| `initialPassword`           | 6–12 位                       | 普通批量建号密码；不能与管理岗位批量开通同时使用                     |
+| `createAccounts`            | `false`                       | 为普通目录中具有有效手机号的人员建号；每个账号密码取该手机号后六位   |
 | `provisionSystemAdminCount` | `0`，最大 20                  | 仅联系人简表有效，把前 N 个有效联系人开通为系统管理员                |
 | `provisionSystemAdminPhone` | 完整手机号                    | 仅联系人简表有效，且手机号必须存在于本次文件中                       |
 
 服务端自动识别完整人员表（含“人员编码、人员姓名”）和联系人简表（含“姓名、联系电话”）。完整表映射姓名、个人/工作手机、组织层级、岗位、任职状态及合作企业等账号管理白名单字段；身份证、银行卡、家庭联系方式、附件及未知列不会落库。联系人简表以手机号盲索引生成稳定内部编码，并可按文件有效行顺序开通管理账号。
 
-管理岗位新账号默认密码为手机号后 6 位并强制首次改密；前 N 个有效联系人和指定表内手机号均获得系统管理员授权，同一联系人重复命中时只保留一条授权。既有账号只关联人员并补充缺失角色，不重置原密码。`GET /admin/personnel`、`GET /admin/personnel/imports` 和 `/admin/personnel-positions` 用于在线查看、审计和配置；职务模板返回 `recommendedRoles`，但不会自动改变授权。
+所有新账号（包括人员同步、人工关联和管理员直接创建）初始密码均为手机号后六位并强制首次改密；管理员重置密码也恢复为该规则。前 N 个有效联系人和指定表内手机号均获得系统管理员授权，同一联系人重复命中时只保留一条授权。既有账号同步只关联人员并补充缺失角色，不自动重置密码。`GET /admin/personnel`、`GET /admin/personnel/imports` 和 `/admin/personnel-positions` 用于在线查看、审计和配置；职务模板返回 `recommendedRoles`，但不会自动改变授权。
 
 ## 查询
 

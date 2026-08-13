@@ -33,10 +33,6 @@ export class CreateUserDto {
   @Length(1, 80)
   displayName!: string;
 
-  @IsString()
-  @Length(6, 12, { message: "初始密码长度须为 6 至 12 位" })
-  initialPassword!: string;
-
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
@@ -56,9 +52,7 @@ export class UpdateUserDto {
 }
 
 export class ResetPasswordDto {
-  @IsString()
-  @Length(6, 12, { message: "初始密码长度须为 6 至 12 位" })
-  initialPassword!: string;
+  // The server derives the reset password from the target user's phone.
 }
 
 export class UpdateDistrictDto {

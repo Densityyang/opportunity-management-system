@@ -20,6 +20,8 @@ docker compose run --rm api pnpm --filter @oms/api prisma:seed
 docker compose ps
 ```
 
+引导管理员初始密码为其手机号后六位，首次登录后必须修改；后续新建账号和管理员重置密码也遵循同一规则。
+
 不得把 `docker compose config` 的完整输出粘贴到工单或 PR，因为它可能包含展开后的秘密。
 
 ## 健康与日志
