@@ -2,7 +2,7 @@ name: opportunity-management-system
 
 services:
   postgres:
-    image: postgres:18-alpine
+    image: postgres:latest
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -68,7 +68,7 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
     ports:
-      - "8080:80"
+      - "${OMS_BIND_ADDRESS:-127.0.0.1}:${OMS_HTTP_PORT:-18280}:80"
     depends_on:
       api:
         condition: service_healthy

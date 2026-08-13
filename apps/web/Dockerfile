@@ -9,7 +9,7 @@ COPY packages/contracts ./packages/contracts
 COPY apps/web ./apps/web
 RUN pnpm --filter @oms/contracts build && pnpm --filter @oms/web build
 
-FROM nginx:1.29-alpine
+FROM nginx:1.27-alpine
 COPY infra/nginx/default.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /workspace/apps/web/dist /usr/share/nginx/html
 EXPOSE 80
