@@ -75,7 +75,6 @@ export function PersonnelAdminPanel({ capabilities, districts }: Props) {
   const [positionForm] = Form.useForm();
   const [accountForm] = Form.useForm();
   const accountRoles = Form.useWatch<RoleCode[]>("roles", accountForm) ?? [];
-  const passwordMode = Form.useWatch<string>("passwordMode", accountForm);
 
   async function load(): Promise<void> {
     setLoading(true);
@@ -232,15 +231,12 @@ export function PersonnelAdminPanel({ capabilities, districts }: Props) {
       roles: row.recommendedRoles.filter((role) =>
         capabilities.manageableRoles.includes(role),
       ),
-      passwordMode: "PHONE_LAST_6",
     });
   }
 
   async function createAccount(values: {
     roles: RoleCode[];
     districtId?: string;
-    passwordMode: "PHONE_LAST_6" | "EXPLICIT";
-    initialPassword?: string;
   }): Promise<void> {
     if (!accountPerson) return;
     const grants = values.roles.map((role) =>
@@ -252,11 +248,6 @@ export function PersonnelAdminPanel({ capabilities, districts }: Props) {
       await api(`/admin/personnel/${accountPerson.id}/account`, {
         method: "POST",
         body: JSON.stringify({
-          passwordMode: values.passwordMode,
-          initialPassword:
-            values.passwordMode === "EXPLICIT"
-              ? values.initialPassword
-              : undefined,
           grants,
         }),
       });
@@ -685,27 +676,11 @@ export function PersonnelAdminPanel({ capabilities, districts }: Props) {
               />
             </Form.Item>
           )}
-          <Form.Item
-            name="passwordMode"
-            label="初始密码"
-            rules={[{ required: true }]}
-          >
-            <Select
-              options={[
-                { value: "PHONE_LAST_6", label: "手机号后 6 位（推荐）" },
-                { value: "EXPLICIT", label: "手动设置 6 至 12 位" },
-              ]}
-            />
-          </Form.Item>
-          {passwordMode === "EXPLICIT" && (
-            <Form.Item
-              name="initialPassword"
-              label="手动初始密码"
-              rules={[{ required: true }, { min: 6 }, { max: 12 }]}
-            >
-              <Input.Password maxLength={12} />
-            </Form.Item>
-          )}
+          <Alert
+            type="info"
+            showIcon
+            message="初始密码自动设置为手机号后六位，首次登录必须修改。"
+          />
         </Form>
       </Modal>
     </Space>

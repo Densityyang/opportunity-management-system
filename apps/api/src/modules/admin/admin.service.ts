@@ -7,6 +7,7 @@ import argon2 from "argon2";
 import type { AuthIdentity } from "../../common/auth.types";
 import { CryptoService } from "../../common/crypto.service";
 import { forbidden, notFound } from "../../common/http-error";
+import { initialPasswordFromPhone } from "../../common/initial-password";
 import { PrismaService } from "../../common/prisma.service";
 import { Prisma, RoleCode } from "../../generated/prisma/client";
 import {
@@ -106,7 +107,7 @@ export class AdminService {
       });
 
     const encrypted = this.crypto.encrypt(phone);
-    const passwordHash = await argon2.hash(dto.initialPassword, {
+    const passwordHash = await argon2.hash(initialPasswordFromPhone(phone), {
       type: argon2.argon2id,
     });
     const user = await this.prisma.$transaction(async (tx) => {
@@ -195,11 +196,16 @@ export class AdminService {
   async resetPassword(
     identity: AuthIdentity,
     userId: string,
-    dto: ResetPasswordDto,
+    _dto: ResetPasswordDto,
   ) {
     const target = await this.loadUser(userId);
     this.policy.assertCanManageGlobalUser(identity, target);
-    const passwordHash = await argon2.hash(dto.initialPassword, {
+    const phone = this.crypto.decrypt({
+      ciphertext: target.phoneCiphertext,
+      iv: target.phoneIv,
+      tag: target.phoneTag,
+    });
+    const passwordHash = await argon2.hash(initialPasswordFromPhone(phone), {
       type: argon2.argon2id,
     });
     await this.prisma.$transaction(async (tx) => {

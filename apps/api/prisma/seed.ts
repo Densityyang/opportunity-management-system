@@ -2,6 +2,7 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import argon2 from "argon2";
 import { createCipheriv, createHmac, randomBytes } from "node:crypto";
+import { initialPasswordFromPhone } from "../src/common/initial-password";
 import { PrismaClient } from "../src/generated/prisma/client";
 
 const connectionString = process.env.DATABASE_URL;
@@ -89,13 +90,11 @@ async function main(): Promise<void> {
   }
 
   const phone = process.env.BOOTSTRAP_ADMIN_PHONE;
-  const password = process.env.BOOTSTRAP_ADMIN_PASSWORD;
   if (!phone || !/^1[3-9]\d{9}$/.test(phone))
     throw new Error(
       "BOOTSTRAP_ADMIN_PHONE must be a valid mainland China mobile number",
     );
-  if (!password || password.length < 6 || password.length > 12)
-    throw new Error("BOOTSTRAP_ADMIN_PASSWORD must have 6 to 12 characters");
+  const password = initialPasswordFromPhone(phone);
   const encrypted = encrypt(phone);
   const phoneBlindIndex = blindIndex(phone);
   const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
