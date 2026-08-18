@@ -87,7 +87,9 @@ export class PersonnelBatchService {
     private readonly policy: AdministrationPolicyService,
   ) {}
 
-  async listRules(identity: AuthIdentity): Promise<PersonnelDistrictRuleView[]> {
+  async listRules(
+    identity: AuthIdentity,
+  ): Promise<PersonnelDistrictRuleView[]> {
     this.policy.assertCanBatchProvisionPersonnel(identity);
     const rows = await this.prisma.personnelDistrictRule.findMany({
       include: { district: true },
@@ -301,7 +303,9 @@ export class PersonnelBatchService {
     return this.batchView(batchId);
   }
 
-  async listBatches(identity: AuthIdentity): Promise<PersonnelAccountBatchView[]> {
+  async listBatches(
+    identity: AuthIdentity,
+  ): Promise<PersonnelAccountBatchView[]> {
     this.policy.assertCanBatchProvisionPersonnel(identity);
     const rows = await this.prisma.personnelAccountBatch.findMany({
       orderBy: { createdAt: "desc" },
@@ -327,7 +331,8 @@ export class PersonnelBatchService {
     const status = query.status as PersonnelAccountBatchItemStatus | undefined;
     const where: Prisma.PersonnelAccountBatchItemWhereInput = {
       batchId,
-      ...(status && Object.values(PersonnelAccountBatchItemStatus).includes(status)
+      ...(status &&
+      Object.values(PersonnelAccountBatchItemStatus).includes(status)
         ? { status }
         : {}),
     };
@@ -389,10 +394,15 @@ export class PersonnelBatchService {
       "Content-Disposition",
       `attachment; filename="personnel-account-batch-${batchId}.xlsx"`,
     );
-    await this.audit(this.prisma, identity.id, "PERSONNEL_ACCOUNT_BATCH_EXPORTED", {
-      batchId,
-      rowCount: count,
-    });
+    await this.audit(
+      this.prisma,
+      identity.id,
+      "PERSONNEL_ACCOUNT_BATCH_EXPORTED",
+      {
+        batchId,
+        rowCount: count,
+      },
+    );
     const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
       stream: response,
       useStyles: true,
@@ -423,18 +433,23 @@ export class PersonnelBatchService {
       if (!rows.length) break;
       for (const row of rows) {
         const phone = this.preferredPhone(row.personnel);
-        sheet.addRow({
-          personnelCode: row.personnel.personnelCode,
-          name: row.personnel.name,
-          source: row.personnel.sourceProfile === "CONTACT_ONLY" ? "联系人简表" : "完整人员表",
-          organization: row.personnel.organizationPath ?? "—",
-          position: row.personnel.positionName ?? "—",
-          phone: phone ? this.maskPhone(phone) : "—",
-          district: row.district?.name ?? "—",
-          status: row.status,
-          reason: row.reason ?? "—",
-          updatedAt: row.updatedAt.toLocaleString("zh-CN"),
-        }).commit();
+        sheet
+          .addRow({
+            personnelCode: row.personnel.personnelCode,
+            name: row.personnel.name,
+            source:
+              row.personnel.sourceProfile === "CONTACT_ONLY"
+                ? "联系人简表"
+                : "完整人员表",
+            organization: row.personnel.organizationPath ?? "—",
+            position: row.personnel.positionName ?? "—",
+            phone: phone ? this.maskPhone(phone) : "—",
+            district: row.district?.name ?? "—",
+            status: row.status,
+            reason: row.reason ?? "—",
+            updatedAt: row.updatedAt.toLocaleString("zh-CN"),
+          })
+          .commit();
       }
       const last = rows[rows.length - 1];
       if (!last) break;
@@ -447,10 +462,14 @@ export class PersonnelBatchService {
     const batch = await this.prisma.personnelAccountBatch.findUnique({
       where: { id: batchId },
     });
-    if (!batch || batch.status === PersonnelAccountBatchStatus.COMPLETED) return;
+    if (!batch || batch.status === PersonnelAccountBatchStatus.COMPLETED)
+      return;
     await this.prisma.personnelAccountBatch.updateMany({
       where: { id: batchId, status: PersonnelAccountBatchStatus.QUEUED },
-      data: { status: PersonnelAccountBatchStatus.RUNNING, startedAt: new Date() },
+      data: {
+        status: PersonnelAccountBatchStatus.RUNNING,
+        startedAt: new Date(),
+      },
     });
     const items = await this.prisma.personnelAccountBatchItem.findMany({
       where: { batchId, status: PersonnelAccountBatchItemStatus.ELIGIBLE },
@@ -458,7 +477,8 @@ export class PersonnelBatchService {
       orderBy: { id: "asc" },
     });
     try {
-      for (const item of items) await this.processItem(batch.actorUserId, item.id);
+      for (const item of items)
+        await this.processItem(batch.actorUserId, item.id);
     } catch (error) {
       await this.prisma.personnelAccountBatch.update({
         where: { id: batchId },
@@ -483,7 +503,9 @@ export class PersonnelBatchService {
     await this.prisma.personnelAccountBatch.update({
       where: { id: batchId },
       data: {
-        status: failed ? PersonnelAccountBatchStatus.PARTIAL : PersonnelAccountBatchStatus.COMPLETED,
+        status: failed
+          ? PersonnelAccountBatchStatus.PARTIAL
+          : PersonnelAccountBatchStatus.COMPLETED,
         createdRows: created,
         skippedExistingRows: counts.skippedExisting,
         skippedInactiveRows: counts.skippedInactive,
@@ -496,20 +518,32 @@ export class PersonnelBatchService {
     });
   }
 
-  private async processItem(actorUserId: string, itemId: string): Promise<void> {
+  private async processItem(
+    actorUserId: string,
+    itemId: string,
+  ): Promise<void> {
     const item = await this.prisma.personnelAccountBatchItem.findUnique({
       where: { id: itemId },
       include: { personnel: true, batch: true },
     });
-    if (!item || item.status !== PersonnelAccountBatchItemStatus.ELIGIBLE) return;
+    if (!item || item.status !== PersonnelAccountBatchItemStatus.ELIGIBLE)
+      return;
     const personnel = item.personnel;
     if (!personnel.active) {
-      await this.updateItem(itemId, PersonnelAccountBatchItemStatus.SKIPPED_INACTIVE, "人员已停用");
+      await this.updateItem(
+        itemId,
+        PersonnelAccountBatchItemStatus.SKIPPED_INACTIVE,
+        "人员已停用",
+      );
       return;
     }
     const phone = this.preferredPhone(personnel);
     if (!phone) {
-      await this.updateItem(itemId, PersonnelAccountBatchItemStatus.SKIPPED_NO_PHONE, "没有有效个人或工作手机号");
+      await this.updateItem(
+        itemId,
+        PersonnelAccountBatchItemStatus.SKIPPED_NO_PHONE,
+        "没有有效个人或工作手机号",
+      );
       return;
     }
     const phoneBlindIndex = this.crypto.blindIndex(phone);
@@ -520,13 +554,22 @@ export class PersonnelBatchService {
       await this.prisma.$transaction(async (tx) => {
         const current = await tx.personnelAccountBatchItem.findUnique({
           where: { id: itemId },
-          include: { personnel: { include: { user: { select: { id: true } } } } },
+          include: {
+            personnel: { include: { user: { select: { id: true } } } },
+          },
         });
-        if (!current || current.status !== PersonnelAccountBatchItemStatus.ELIGIBLE) return;
+        if (
+          !current ||
+          current.status !== PersonnelAccountBatchItemStatus.ELIGIBLE
+        )
+          return;
         if (!current.personnel.active) {
           await tx.personnelAccountBatchItem.update({
             where: { id: itemId },
-            data: { status: PersonnelAccountBatchItemStatus.SKIPPED_INACTIVE, reason: "人员已停用" },
+            data: {
+              status: PersonnelAccountBatchItemStatus.SKIPPED_INACTIVE,
+              reason: "人员已停用",
+            },
           });
           return;
         }
@@ -540,11 +583,16 @@ export class PersonnelBatchService {
           });
           return;
         }
-        const existing = await tx.user.findUnique({ where: { phoneBlindIndex } });
+        const existing = await tx.user.findUnique({
+          where: { phoneBlindIndex },
+        });
         if (existing) {
           await tx.personnelAccountBatchItem.update({
             where: { id: itemId },
-            data: { status: PersonnelAccountBatchItemStatus.SKIPPED_EXISTING, reason: "手机号已存在系统账号" },
+            data: {
+              status: PersonnelAccountBatchItemStatus.SKIPPED_EXISTING,
+              reason: "手机号已存在系统账号",
+            },
           });
           return;
         }
@@ -554,7 +602,10 @@ export class PersonnelBatchService {
         if (!district?.enabled) {
           await tx.personnelAccountBatchItem.update({
             where: { id: itemId },
-            data: { status: PersonnelAccountBatchItemStatus.SKIPPED_UNMAPPED, reason: "目标区县已停用或不存在" },
+            data: {
+              status: PersonnelAccountBatchItemStatus.SKIPPED_UNMAPPED,
+              reason: "目标区县已停用或不存在",
+            },
           });
           return;
         }
@@ -569,26 +620,42 @@ export class PersonnelBatchService {
             personnelId: current.personnel.id,
             credential: { create: { passwordHash } },
             grants: {
-              create: { role: RoleCode.FIELD_REPORTER, districtId: district.id },
+              create: {
+                role: RoleCode.FIELD_REPORTER,
+                districtId: district.id,
+              },
             },
           },
         });
         await tx.personnelAccountBatchItem.update({
           where: { id: itemId },
-          data: { status: PersonnelAccountBatchItemStatus.CREATED, reason: null },
+          data: {
+            status: PersonnelAccountBatchItemStatus.CREATED,
+            reason: null,
+          },
         });
-        await this.audit(tx, actorUserId, "PERSONNEL_ACCOUNT_BATCH_ACCOUNT_CREATED", {
-          batchId: current.batchId,
-          itemId,
-          personnelId: current.personnelId,
-          targetUserId: user.id,
-          districtId: district.id,
-          role: RoleCode.FIELD_REPORTER,
-        });
+        await this.audit(
+          tx,
+          actorUserId,
+          "PERSONNEL_ACCOUNT_BATCH_ACCOUNT_CREATED",
+          {
+            batchId: current.batchId,
+            itemId,
+            personnelId: current.personnelId,
+            targetUserId: user.id,
+            districtId: district.id,
+            role: RoleCode.FIELD_REPORTER,
+          },
+        );
       });
     } catch (error) {
-      const reason = error instanceof Error ? error.message.slice(0, 500) : "开户失败";
-      await this.updateItem(itemId, PersonnelAccountBatchItemStatus.FAILED, reason);
+      const reason =
+        error instanceof Error ? error.message.slice(0, 500) : "开户失败";
+      await this.updateItem(
+        itemId,
+        PersonnelAccountBatchItemStatus.FAILED,
+        reason,
+      );
     }
   }
 
@@ -611,12 +678,20 @@ export class PersonnelBatchService {
     if (!batch) throw notFound("批量开户批次不存在");
     const statuses = batch.items.map((item) => item.status);
     const counts = this.countStatuses(statuses);
-    const districtMap = new Map<string, { districtId: string; districtName: string; count: number }>();
+    const districtMap = new Map<
+      string,
+      { districtId: string; districtName: string; count: number }
+    >();
     for (const item of batch.items) {
       if (!item.district) continue;
       const current = districtMap.get(item.district.id);
       if (current) current.count += 1;
-      else districtMap.set(item.district.id, { districtId: item.district.id, districtName: item.district.name, count: 1 });
+      else
+        districtMap.set(item.district.id, {
+          districtId: item.district.id,
+          districtName: item.district.name,
+          count: 1,
+        });
     }
     return {
       id: batch.id,
@@ -631,8 +706,12 @@ export class PersonnelBatchService {
       skippedUnmappedRows: counts.skippedUnmapped,
       skippedAmbiguousRows: counts.skippedAmbiguous,
       failedRows: counts.failed,
-      progressRows: statuses.filter((status) => status !== PersonnelAccountBatchItemStatus.ELIGIBLE).length,
-      districtCounts: [...districtMap.values()].sort((a, b) => b.count - a.count),
+      progressRows: statuses.filter(
+        (status) => status !== PersonnelAccountBatchItemStatus.ELIGIBLE,
+      ).length,
+      districtCounts: [...districtMap.values()].sort(
+        (a, b) => b.count - a.count,
+      ),
       createdAt: batch.createdAt.toISOString(),
       startedAt: batch.startedAt?.toISOString() ?? null,
       completedAt: batch.completedAt?.toISOString() ?? null,
@@ -643,7 +722,10 @@ export class PersonnelBatchService {
   private classify(
     personnel: PersonForBatch,
     rules: Rule[],
-    districtByCode: Map<string, { id: string; code: string; name: string; enabled: boolean }>,
+    districtByCode: Map<
+      string,
+      { id: string; code: string; name: string; enabled: boolean }
+    >,
     existingPhoneIndexes: Set<string>,
   ): {
     personnel: PersonForBatch;
@@ -714,13 +796,26 @@ export class PersonnelBatchService {
   private resolve(
     personnel: PersonForBatch,
     rules: Rule[],
-    districtByCode: Map<string, { id: string; code: string; name: string; enabled: boolean }>,
+    districtByCode: Map<
+      string,
+      { id: string; code: string; name: string; enabled: boolean }
+    >,
   ): Resolution {
     const jinNiu = districtByCode.get("510106");
     if (personnel.sourceProfile === PersonnelSourceProfile.CONTACT_ONLY)
       return jinNiu
-        ? { districtId: jinNiu.id, ruleId: null, status: "MAPPED", reason: null }
-        : { districtId: null, ruleId: null, status: "UNMAPPED", reason: "金牛区县不存在" };
+        ? {
+            districtId: jinNiu.id,
+            ruleId: null,
+            status: "MAPPED",
+            reason: null,
+          }
+        : {
+            districtId: null,
+            ruleId: null,
+            status: "UNMAPPED",
+            reason: "金牛区县不存在",
+          };
     const text = [
       personnel.organizationPath,
       personnel.thirdLevelOrganization,
@@ -734,11 +829,34 @@ export class PersonnelBatchService {
       .toLocaleLowerCase("zh-CN");
     const matched = rules
       .filter((rule) => rule.enabled)
-      .filter((rule) => text.includes(rule.includeText.normalize("NFKC").trim().toLocaleLowerCase("zh-CN")))
-      .filter((rule) => !rule.excludeText || !text.includes(rule.excludeText.normalize("NFKC").trim().toLocaleLowerCase("zh-CN")))
-      .sort((a, b) => b.priority - a.priority || b.includeText.length - a.includeText.length || a.id.localeCompare(b.id));
+      .filter((rule) =>
+        text.includes(
+          rule.includeText.normalize("NFKC").trim().toLocaleLowerCase("zh-CN"),
+        ),
+      )
+      .filter(
+        (rule) =>
+          !rule.excludeText ||
+          !text.includes(
+            rule.excludeText
+              .normalize("NFKC")
+              .trim()
+              .toLocaleLowerCase("zh-CN"),
+          ),
+      )
+      .sort(
+        (a, b) =>
+          b.priority - a.priority ||
+          b.includeText.length - a.includeText.length ||
+          a.id.localeCompare(b.id),
+      );
     if (!matched.length)
-      return { districtId: null, ruleId: null, status: "UNMAPPED", reason: "组织未匹配到区县规则" };
+      return {
+        districtId: null,
+        ruleId: null,
+        status: "UNMAPPED",
+        reason: "组织未匹配到区县规则",
+      };
     const first = matched[0]!;
     const conflict = matched.some(
       (rule) =>
@@ -748,24 +866,45 @@ export class PersonnelBatchService {
         rule.districtId !== first.districtId,
     );
     if (conflict)
-      return { districtId: null, ruleId: null, status: "AMBIGUOUS", reason: "组织同时命中多个同优先级区县规则" };
+      return {
+        districtId: null,
+        ruleId: null,
+        status: "AMBIGUOUS",
+        reason: "组织同时命中多个同优先级区县规则",
+      };
     if (!first.district.enabled)
-      return { districtId: null, ruleId: first.id, status: "UNMAPPED", reason: "匹配到的区县已停用" };
-    return { districtId: first.districtId, ruleId: first.id, status: "MAPPED", reason: null };
+      return {
+        districtId: null,
+        ruleId: first.id,
+        status: "UNMAPPED",
+        reason: "匹配到的区县已停用",
+      };
+    return {
+      districtId: first.districtId,
+      ruleId: first.id,
+      status: "MAPPED",
+      reason: null,
+    };
   }
 
   private async loadRules(): Promise<Rule[]> {
     return (await this.prisma.personnelDistrictRule.findMany({
-      include: { district: { select: { id: true, name: true, enabled: true } } },
+      include: {
+        district: { select: { id: true, name: true, enabled: true } },
+      },
       orderBy: [{ priority: "desc" }, { includeText: "asc" }, { id: "asc" }],
     })) as Rule[];
   }
 
-  private async existingPhoneIndexes(personnel: PersonForBatch[]): Promise<Set<string>> {
+  private async existingPhoneIndexes(
+    personnel: PersonForBatch[],
+  ): Promise<Set<string>> {
     const indexes = [
       ...new Set(
         personnel.flatMap((person) =>
-          [person.personalPhoneBlindIndex, person.workPhoneBlindIndex].filter(Boolean),
+          [person.personalPhoneBlindIndex, person.workPhoneBlindIndex].filter(
+            Boolean,
+          ),
         ),
       ),
     ] as string[];
@@ -791,7 +930,10 @@ export class PersonnelBatchService {
     ];
     if (MOBILE_RE.test(search)) {
       const index = this.crypto.blindIndex(search);
-      options.push({ personalPhoneBlindIndex: index }, { workPhoneBlindIndex: index });
+      options.push(
+        { personalPhoneBlindIndex: index },
+        { workPhoneBlindIndex: index },
+      );
     }
     return { OR: options };
   }
@@ -873,20 +1015,39 @@ export class PersonnelBatchService {
       .digest("hex");
   }
 
-  private countItems(items: Array<{ status: PersonnelAccountBatchItemStatus }>) {
+  private countItems(
+    items: Array<{ status: PersonnelAccountBatchItemStatus }>,
+  ) {
     return this.countStatuses(items.map((item) => item.status));
   }
 
   private countStatuses(statuses: PersonnelAccountBatchItemStatus[]) {
     return {
-      eligible: statuses.filter((status) => status === PersonnelAccountBatchItemStatus.ELIGIBLE).length,
-      created: statuses.filter((status) => status === PersonnelAccountBatchItemStatus.CREATED).length,
-      skippedExisting: statuses.filter((status) => status === PersonnelAccountBatchItemStatus.SKIPPED_EXISTING).length,
-      skippedInactive: statuses.filter((status) => status === PersonnelAccountBatchItemStatus.SKIPPED_INACTIVE).length,
-      skippedNoPhone: statuses.filter((status) => status === PersonnelAccountBatchItemStatus.SKIPPED_NO_PHONE).length,
-      skippedUnmapped: statuses.filter((status) => status === PersonnelAccountBatchItemStatus.SKIPPED_UNMAPPED).length,
-      skippedAmbiguous: statuses.filter((status) => status === PersonnelAccountBatchItemStatus.SKIPPED_AMBIGUOUS).length,
-      failed: statuses.filter((status) => status === PersonnelAccountBatchItemStatus.FAILED).length,
+      eligible: statuses.filter(
+        (status) => status === PersonnelAccountBatchItemStatus.ELIGIBLE,
+      ).length,
+      created: statuses.filter(
+        (status) => status === PersonnelAccountBatchItemStatus.CREATED,
+      ).length,
+      skippedExisting: statuses.filter(
+        (status) => status === PersonnelAccountBatchItemStatus.SKIPPED_EXISTING,
+      ).length,
+      skippedInactive: statuses.filter(
+        (status) => status === PersonnelAccountBatchItemStatus.SKIPPED_INACTIVE,
+      ).length,
+      skippedNoPhone: statuses.filter(
+        (status) => status === PersonnelAccountBatchItemStatus.SKIPPED_NO_PHONE,
+      ).length,
+      skippedUnmapped: statuses.filter(
+        (status) => status === PersonnelAccountBatchItemStatus.SKIPPED_UNMAPPED,
+      ).length,
+      skippedAmbiguous: statuses.filter(
+        (status) =>
+          status === PersonnelAccountBatchItemStatus.SKIPPED_AMBIGUOUS,
+      ).length,
+      failed: statuses.filter(
+        (status) => status === PersonnelAccountBatchItemStatus.FAILED,
+      ).length,
     };
   }
 

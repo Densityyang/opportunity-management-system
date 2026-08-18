@@ -10,7 +10,9 @@ type Resolution = {
   reason: string | null;
 };
 
-const service = Object.create(PersonnelBatchService.prototype) as PersonnelBatchService;
+const service = Object.create(
+  PersonnelBatchService.prototype,
+) as PersonnelBatchService;
 const resolve = (
   service as unknown as {
     resolve: (...args: unknown[]) => Resolution;
@@ -23,7 +25,10 @@ const district = (id: string, name: string, enabled = true) => ({
   enabled,
 });
 
-const person = (sourceProfile: PersonnelSourceProfile, organizationPath: string | null) => ({
+const person = (
+  sourceProfile: PersonnelSourceProfile,
+  organizationPath: string | null,
+) => ({
   id: "person-1",
   personnelCode: "P-1",
   name: "测试人员",
@@ -48,7 +53,10 @@ const person = (sourceProfile: PersonnelSourceProfile, organizationPath: string 
 
 test("龙泉驿规则优先于同时出现的天府新区", () => {
   const result = resolve(
-    person(PersonnelSourceProfile.FULL_DIRECTORY, "四川分公司/成都分公司/天府新区支撑服务中心/龙泉驿班组"),
+    person(
+      PersonnelSourceProfile.FULL_DIRECTORY,
+      "四川分公司/成都分公司/天府新区支撑服务中心/龙泉驿班组",
+    ),
     [
       {
         id: "tianfu",
@@ -99,7 +107,10 @@ test("联系人简表固定归金牛且不依赖组织规则", () => {
 
 test("同优先级命中不同区县时返回歧义", () => {
   const result = resolve(
-    person(PersonnelSourceProfile.FULL_DIRECTORY, "四川分公司/成都分公司/冲突组织"),
+    person(
+      PersonnelSourceProfile.FULL_DIRECTORY,
+      "四川分公司/成都分公司/冲突组织",
+    ),
     [
       {
         id: "one",

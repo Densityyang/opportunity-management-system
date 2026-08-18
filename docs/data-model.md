@@ -2,29 +2,29 @@
 
 ## 关键实体
 
-| 实体                                              | 用途                               | 关键约束                                              |
-| ------------------------------------------------- | ---------------------------------- | ----------------------------------------------------- |
-| `users` / `password_credentials` / `sessions`     | 账号、密码和服务端会话             | 手机号盲索引唯一；初始密码强制修改                    |
-| `role_grants`                                     | 一人多角色、多区县授权及承接候选池 | 活跃授权按用户、角色、区县唯一；区县角色必填区县      |
-| `districts`                                       | 区县字典、启停和展示顺序           | 当前 23 个业务区县按 `sort_order` 固定排序            |
-| `personnel`                                       | 可在线同步的人员目录               | 人员编码唯一；手机号密文＋盲索引；区分完整表/简表来源 |
-| `personnel_positions` / `position_role_templates` | 职务字典和多角色建议模板           | 职务编码、名称唯一；模板只给出建议，不直接授权        |
-| `personnel_imports`                               | 人员同步审计与计数                 | 记录来源、模式、行数、告警及操作人                    |
-| `personnel_district_rules`                        | 组织关键词到区县的可配置映射       | 规则按启停、优先级和关键词长度确定唯一目标区县        |
-| `personnel_account_batches` / `personnel_account_batch_items` | 批量开户预检、后台任务和结果明细 | 批次与人员唯一；已有账号和异常项只记录跳过原因       |
-| `opportunities`                                   | 当前问卷快照与工作流状态           | 乐观版本 `version`；正文密文                          |
-| `opportunity_revisions`                           | 一线每次提交的不可覆盖快照         | 商机＋修订号唯一；JSON 中仍只存密文                   |
-| `assignments`                                     | 承接历史                           | 每个商机最多一条活跃分派                              |
-| `handling_results`                                | 成功或失败结果                     | 成功只含名称；成功与失败字段互斥                      |
-| `workflow_events`                                 | 追加式节点历史                     | 记录前后状态、操作人授权和加密说明                    |
-| `sla_rounds`                                      | 独立初审/终审计时轮次              | 商机＋类型＋轮次号唯一                                |
-| `notifications`                                   | 站内通知                           | 可限定到具体角色授权                                  |
-| `audio_records`                                   | 加密音频元数据                     | 每商机最多一个；最大 5 MB / 30.5 秒数据库约束         |
-| `idempotency_records`                             | 重复请求响应缓存                   | 作用域＋键唯一，24h 到期                              |
-| `outbox_events`                                   | 可靠异步事件                       | 由 worker 锁定认领                                    |
-| `reauth_tokens` / `export_audits`                 | 一次性导出授权与审计               | 5 分钟、只能消费一次                                  |
-| `access_audits`                                   | 市公司详情/音频敏感访问审计        | 与正文独立保留                                        |
-| `retention_candidates`                            | 到期数据人工清理队列               | 主数据不自动删除                                      |
+| 实体                                                          | 用途                               | 关键约束                                              |
+| ------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------- |
+| `users` / `password_credentials` / `sessions`                 | 账号、密码和服务端会话             | 手机号盲索引唯一；初始密码强制修改                    |
+| `role_grants`                                                 | 一人多角色、多区县授权及承接候选池 | 活跃授权按用户、角色、区县唯一；区县角色必填区县      |
+| `districts`                                                   | 区县字典、启停和展示顺序           | 当前 23 个业务区县按 `sort_order` 固定排序            |
+| `personnel`                                                   | 可在线同步的人员目录               | 人员编码唯一；手机号密文＋盲索引；区分完整表/简表来源 |
+| `personnel_positions` / `position_role_templates`             | 职务字典和多角色建议模板           | 职务编码、名称唯一；模板只给出建议，不直接授权        |
+| `personnel_imports`                                           | 人员同步审计与计数                 | 记录来源、模式、行数、告警及操作人                    |
+| `personnel_district_rules`                                    | 组织关键词到区县的可配置映射       | 规则按启停、优先级和关键词长度确定唯一目标区县        |
+| `personnel_account_batches` / `personnel_account_batch_items` | 批量开户预检、后台任务和结果明细   | 批次与人员唯一；已有账号和异常项只记录跳过原因        |
+| `opportunities`                                               | 当前问卷快照与工作流状态           | 乐观版本 `version`；正文密文                          |
+| `opportunity_revisions`                                       | 一线每次提交的不可覆盖快照         | 商机＋修订号唯一；JSON 中仍只存密文                   |
+| `assignments`                                                 | 承接历史                           | 每个商机最多一条活跃分派                              |
+| `handling_results`                                            | 成功或失败结果                     | 成功只含名称；成功与失败字段互斥                      |
+| `workflow_events`                                             | 追加式节点历史                     | 记录前后状态、操作人授权和加密说明                    |
+| `sla_rounds`                                                  | 独立初审/终审计时轮次              | 商机＋类型＋轮次号唯一                                |
+| `notifications`                                               | 站内通知                           | 可限定到具体角色授权                                  |
+| `audio_records`                                               | 加密音频元数据                     | 每商机最多一个；最大 5 MB / 30.5 秒数据库约束         |
+| `idempotency_records`                                         | 重复请求响应缓存                   | 作用域＋键唯一，24h 到期                              |
+| `outbox_events`                                               | 可靠异步事件                       | 由 worker 锁定认领                                    |
+| `reauth_tokens` / `export_audits`                             | 一次性导出授权与审计               | 5 分钟、只能消费一次                                  |
+| `access_audits`                                               | 市公司详情/音频敏感访问审计        | 与正文独立保留                                        |
+| `retention_candidates`                                        | 到期数据人工清理队列               | 主数据不自动删除                                      |
 
 `handling_results` 明确不存在产品、金额、预计签约时间、收入、毛利、奖励等列，也没有可绕过校验的通用成功结果 JSON 字段。
 

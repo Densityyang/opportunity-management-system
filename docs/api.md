@@ -29,11 +29,11 @@
 | GET/POST/PATCH | `/admin/personnel…`、`/admin/personnel-positions…` | 人员目录、职务建议模板和人工账号关联                                                  |
 | POST           | `/admin/personnel/import`                          | 仅系统管理员可执行 XLSX 预检与同步                                                    |
 | GET            | `/admin/personnel/imports`                         | 最近同步记录与忽略列告警                                                              |
-| GET/POST/PATCH | `/admin/personnel-district-rules…`                | 仅系统管理员维护组织关键词到区县的映射规则                                            |
+| GET/POST/PATCH | `/admin/personnel-district-rules…`                 | 仅系统管理员维护组织关键词到区县的映射规则                                            |
 | POST           | `/admin/personnel/account-batches/preview`         | 仅系统管理员按当前人员搜索结果预检批量开户，不创建账号                                |
-| POST           | `/admin/personnel/account-batches/{id}/execute`   | 仅系统管理员提交后台批量任务；已有账号和异常人员跳过                                  |
+| POST           | `/admin/personnel/account-batches/{id}/execute`    | 仅系统管理员提交后台批量任务；已有账号和异常人员跳过                                  |
 | GET            | `/admin/personnel/account-batches…`                | 查询批次进度、历史和分页明细                                                          |
-| POST           | `/admin/personnel/account-batches/{id}/export`    | 重新认证后导出掩码手机号及处理结果 XLSX                                               |
+| POST           | `/admin/personnel/account-batches/{id}/export`     | 重新认证后导出掩码手机号及处理结果 XLSX                                               |
 | GET            | `/reference/districts`                             | 启用区县下拉数据                                                                      |
 | GET            | `/reference/handlers`                              | 区县经理按区县和客户类型查询有效承接人                                                |
 

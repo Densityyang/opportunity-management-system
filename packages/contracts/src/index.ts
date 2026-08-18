@@ -192,7 +192,11 @@ export interface PersonnelAccountBatchView {
   skippedAmbiguousRows: number;
   failedRows: number;
   progressRows: number;
-  districtCounts: Array<{ districtId: string; districtName: string; count: number }>;
+  districtCounts: Array<{
+    districtId: string;
+    districtName: string;
+    count: number;
+  }>;
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
