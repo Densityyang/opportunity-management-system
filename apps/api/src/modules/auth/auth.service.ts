@@ -117,12 +117,12 @@ export class AuthService {
   ): Promise<{ token: string; expiresAt: string }> {
     if (
       !identity.activeGrant ||
-      !["MUNICIPAL", "SENIOR_MUNICIPAL_ADMIN"].includes(
+      !["MUNICIPAL", "SENIOR_MUNICIPAL_ADMIN", "SYSTEM_ADMIN"].includes(
         identity.activeGrant.role,
       )
     ) {
       throw new ForbiddenException({
-        message: "仅市公司角色或高级市公司管理员可申请导出授权",
+        message: "当前角色不可申请导出授权",
         errorCode: "FORBIDDEN",
       });
     }

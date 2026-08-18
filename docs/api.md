@@ -17,7 +17,7 @@
 | POST           | `/auth/login`                                      | 手机号＋密码登录                                                                      |
 | GET            | `/auth/me`                                         | 当前账号和全部有效授权                                                                |
 | POST           | `/auth/change-password`                            | 首次/主动修改密码                                                                     |
-| POST           | `/auth/reauth`                                     | 市公司或高级市公司管理员导出前密码复核，返回一次性令牌                                |
+| POST           | `/auth/reauth`                                     | 市公司、高级市公司管理员或系统管理员导出前密码复核，返回一次性令牌                    |
 | POST           | `/auth/logout`                                     | 撤销当前会话                                                                          |
 | GET            | `/admin/capabilities`                              | 返回当前管理授权的可管理角色、区县范围和功能开关                                      |
 | GET            | `/admin/users`                                     | 分页账号列表；支持 `search`、`role`、`districtId`、`active`，服务端强制套用层级可见域 |
@@ -29,6 +29,11 @@
 | GET/POST/PATCH | `/admin/personnel…`、`/admin/personnel-positions…` | 人员目录、职务建议模板和人工账号关联                                                  |
 | POST           | `/admin/personnel/import`                          | 仅系统管理员可执行 XLSX 预检与同步                                                    |
 | GET            | `/admin/personnel/imports`                         | 最近同步记录与忽略列告警                                                              |
+| GET/POST/PATCH | `/admin/personnel-district-rules…`                 | 仅系统管理员维护组织关键词到区县的映射规则                                            |
+| POST           | `/admin/personnel/account-batches/preview`         | 仅系统管理员按当前人员搜索结果预检批量开户，不创建账号                                |
+| POST           | `/admin/personnel/account-batches/{id}/execute`    | 仅系统管理员提交后台批量任务；已有账号和异常人员跳过                                  |
+| GET            | `/admin/personnel/account-batches…`                | 查询批次进度、历史和分页明细                                                          |
+| POST           | `/admin/personnel/account-batches/{id}/export`     | 重新认证后导出掩码手机号及处理结果 XLSX                                               |
 | GET            | `/reference/districts`                             | 启用区县下拉数据                                                                      |
 | GET            | `/reference/handlers`                              | 区县经理按区县和客户类型查询有效承接人                                                |
 
@@ -82,6 +87,12 @@
 服务端自动识别完整人员表（含“人员编码、人员姓名”）和联系人简表（含“姓名、联系电话”）。完整表映射姓名、个人/工作手机、组织层级、岗位、任职状态及合作企业等账号管理白名单字段；身份证、银行卡、家庭联系方式、附件及未知列不会落库。联系人简表以手机号盲索引生成稳定内部编码，并可按文件有效行顺序开通管理账号。
 
 所有新账号（包括人员同步、人工关联和管理员直接创建）初始密码均为手机号后六位并强制首次改密；管理员重置密码也恢复为该规则。前 N 个有效联系人和指定表内手机号均获得系统管理员授权，同一联系人重复命中时只保留一条授权。既有账号同步只关联人员并补充缺失角色，不自动重置密码。`GET /admin/personnel`、`GET /admin/personnel/imports` 和 `/admin/personnel-positions` 用于在线查看、审计和配置；职务模板返回 `recommendedRoles`，但不会自动改变授权。
+
+### 人员批量开户
+
+`POST /admin/personnel/account-batches/preview` 的正文仅接受可选 `search`，语义与人员目录现有关键词搜索一致，并跨越全部分页结果。预检按来源计算目标区县：联系人简表固定归金牛，完整人员表使用启用的组织映射规则；龙泉驿规则优先于天府新区。预检明细会区分已有账号、停用、无手机号、未映射和歧义人员。
+
+确认后由 worker 分批处理。每名合格人员单独事务创建账号，并只授予 `FIELD_REPORTER` 与目标 `districtId`；手机号已存在其他账号、人员在预检后发生变化或目标区县停用时重新复核并跳过。批次状态为 `QUEUED`、`RUNNING`、`COMPLETED` 或 `PARTIAL`，重复提交幂等。导出必须通过 `/auth/reauth`，文件不包含明文密码或完整手机号。
 
 ## 查询
 

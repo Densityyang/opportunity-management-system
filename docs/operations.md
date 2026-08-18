@@ -6,7 +6,7 @@
 - `migrate`：API 镜像的一次性 `prisma migrate deploy`。
 - `api`：HTTP 3000，仅在 Compose 网络内暴露。
 - `worker`：Outbox、pg-boss、SLA、恢复和清理。
-- `web`：Nginx 80，对宿主机映射 `8080`。
+- `web`：Nginx 80，默认对宿主机映射 `127.0.0.1:18280`；可通过 `OMS_BIND_ADDRESS` 和 `OMS_HTTP_PORT` 覆盖。
 - `audio_data`：API 与 worker 共享的加密音频卷。
 
 ## 首次初始化
@@ -27,12 +27,14 @@ docker compose ps
 ## 健康与日志
 
 ```powershell
-Invoke-RestMethod http://localhost:8080/api/v1/health
+Invoke-RestMethod http://localhost:18280/api/v1/health
 docker compose ps
 docker compose logs --tail 200 api worker
 ```
 
 日志中不得记录请求正文、Cookie、再验证令牌、加密密钥或导出的完整联系方式。
+
+需要通过局域网或服务器 IP 访问时，在 `.env` 中显式设置 `OMS_BIND_ADDRESS=0.0.0.0`，并按防火墙策略设置 `OMS_HTTP_PORT`；生产环境应同时配置受信任的反向代理和 HTTPS。
 
 ## 备份
 

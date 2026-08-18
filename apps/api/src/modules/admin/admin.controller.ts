@@ -3,10 +3,12 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
   Query,
+  Res,
   UploadedFile,
   UseInterceptors,
 } from "@nestjs/common";
@@ -27,11 +29,16 @@ import { AdminService } from "./admin.service";
 import {
   CreatePersonnelAccountDto,
   PersonnelImportDto,
+  PersonnelAccountBatchItemQueryDto,
+  PersonnelAccountBatchPreviewDto,
+  PersonnelDistrictRuleDto,
   PersonnelListQueryDto,
   PersonnelPositionDto,
   UpdatePersonnelPositionDto,
 } from "./personnel.dto";
 import { PersonnelService } from "./personnel.service";
+import { PersonnelBatchService } from "./personnel-batch.service";
+import type { Response } from "express";
 
 @ApiTags("admin")
 @RequireRoles("SYSTEM_ADMIN", "SENIOR_MUNICIPAL_ADMIN", "DISTRICT_MANAGER")
@@ -40,6 +47,7 @@ export class AdminController {
   constructor(
     private readonly admin: AdminService,
     private readonly personnel: PersonnelService,
+    private readonly personnelBatch: PersonnelBatchService,
   ) {}
 
   @Get("capabilities")
@@ -177,6 +185,85 @@ export class AdminController {
     @Body() dto: UpdatePersonnelPositionDto,
   ) {
     return this.personnel.updatePosition(identity, positionId, dto);
+  }
+
+  @RequireRoles("SYSTEM_ADMIN")
+  @Get("personnel-district-rules")
+  listPersonnelDistrictRules(@CurrentIdentity() identity: AuthIdentity) {
+    return this.personnelBatch.listRules(identity);
+  }
+
+  @RequireRoles("SYSTEM_ADMIN")
+  @Post("personnel-district-rules")
+  createPersonnelDistrictRule(
+    @CurrentIdentity() identity: AuthIdentity,
+    @Body() dto: PersonnelDistrictRuleDto,
+  ) {
+    return this.personnelBatch.createRule(identity, dto);
+  }
+
+  @RequireRoles("SYSTEM_ADMIN")
+  @Patch("personnel-district-rules/:ruleId")
+  updatePersonnelDistrictRule(
+    @CurrentIdentity() identity: AuthIdentity,
+    @Param("ruleId") ruleId: string,
+    @Body() dto: PersonnelDistrictRuleDto,
+  ) {
+    return this.personnelBatch.updateRule(identity, ruleId, dto);
+  }
+
+  @RequireRoles("SYSTEM_ADMIN")
+  @Post("personnel/account-batches/preview")
+  previewPersonnelAccountBatch(
+    @CurrentIdentity() identity: AuthIdentity,
+    @Body() dto: PersonnelAccountBatchPreviewDto,
+  ) {
+    return this.personnelBatch.preview(identity, dto);
+  }
+
+  @RequireRoles("SYSTEM_ADMIN")
+  @Post("personnel/account-batches/:batchId/execute")
+  executePersonnelAccountBatch(
+    @CurrentIdentity() identity: AuthIdentity,
+    @Param("batchId") batchId: string,
+  ) {
+    return this.personnelBatch.execute(identity, batchId);
+  }
+
+  @RequireRoles("SYSTEM_ADMIN")
+  @Get("personnel/account-batches")
+  listPersonnelAccountBatches(@CurrentIdentity() identity: AuthIdentity) {
+    return this.personnelBatch.listBatches(identity);
+  }
+
+  @RequireRoles("SYSTEM_ADMIN")
+  @Get("personnel/account-batches/:batchId")
+  getPersonnelAccountBatch(
+    @CurrentIdentity() identity: AuthIdentity,
+    @Param("batchId") batchId: string,
+  ) {
+    return this.personnelBatch.getBatch(identity, batchId);
+  }
+
+  @RequireRoles("SYSTEM_ADMIN")
+  @Get("personnel/account-batches/:batchId/items")
+  listPersonnelAccountBatchItems(
+    @CurrentIdentity() identity: AuthIdentity,
+    @Param("batchId") batchId: string,
+    @Query() query: PersonnelAccountBatchItemQueryDto,
+  ) {
+    return this.personnelBatch.listItems(identity, batchId, query);
+  }
+
+  @RequireRoles("SYSTEM_ADMIN")
+  @Post("personnel/account-batches/:batchId/export")
+  exportPersonnelAccountBatch(
+    @CurrentIdentity() identity: AuthIdentity,
+    @Headers("x-reauth-token") token: string | undefined,
+    @Param("batchId") batchId: string,
+    @Res() response: Response,
+  ) {
+    return this.personnelBatch.exportBatch(identity, batchId, token, response);
   }
 }
 

@@ -89,6 +89,8 @@ export interface AdminCapabilities {
   canManageDistricts: boolean;
   canViewPersonnel: boolean;
   canImportPersonnel: boolean;
+  canBatchProvisionPersonnel: boolean;
+  canManagePersonnelDistrictRules: boolean;
   canManagePositions: boolean;
   canManageRetention: boolean;
   canViewMunicipal: boolean;
@@ -143,6 +145,76 @@ export interface PersonnelPositionView {
   name: string;
   enabled: boolean;
   roles: RoleCode[];
+}
+
+export type PersonnelAccountBatchStatus =
+  | "PREVIEWED"
+  | "QUEUED"
+  | "RUNNING"
+  | "COMPLETED"
+  | "PARTIAL"
+  | "FAILED"
+  | "EXPIRED";
+
+export type PersonnelAccountBatchItemStatus =
+  | "ELIGIBLE"
+  | "CREATED"
+  | "SKIPPED_EXISTING"
+  | "SKIPPED_INACTIVE"
+  | "SKIPPED_NO_PHONE"
+  | "SKIPPED_UNMAPPED"
+  | "SKIPPED_AMBIGUOUS"
+  | "FAILED";
+
+export interface PersonnelDistrictRuleView {
+  id: string;
+  name: string;
+  includeText: string;
+  excludeText: string | null;
+  priority: number;
+  enabled: boolean;
+  districtId: string;
+  districtName: string;
+  updatedAt: string;
+}
+
+export interface PersonnelAccountBatchView {
+  id: string;
+  search: string | null;
+  status: PersonnelAccountBatchStatus;
+  totalRows: number;
+  eligibleRows: number;
+  createdRows: number;
+  skippedExistingRows: number;
+  skippedInactiveRows: number;
+  skippedNoPhoneRows: number;
+  skippedUnmappedRows: number;
+  skippedAmbiguousRows: number;
+  failedRows: number;
+  progressRows: number;
+  districtCounts: Array<{
+    districtId: string;
+    districtName: string;
+    count: number;
+  }>;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  expiresAt: string;
+}
+
+export interface PersonnelAccountBatchItemView {
+  id: string;
+  personnelId: string;
+  personnelCode: string;
+  name: string;
+  sourceProfile: "FULL_DIRECTORY" | "CONTACT_ONLY";
+  organizationPath: string | null;
+  positionName: string | null;
+  districtName: string | null;
+  status: PersonnelAccountBatchItemStatus;
+  reason: string | null;
+  updatedAt: string;
 }
 
 export interface OpportunitySummary {

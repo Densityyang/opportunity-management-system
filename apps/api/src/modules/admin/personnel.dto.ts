@@ -8,6 +8,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   Length,
   Matches,
   Max,
@@ -119,4 +120,60 @@ export class CreatePersonnelAccountDto {
   @ValidateNested({ each: true })
   @Type(() => CreateRoleGrantDto)
   grants!: CreateRoleGrantDto[];
+}
+
+export class PersonnelDistrictRuleDto {
+  @IsString()
+  @Length(1, 120)
+  name!: string;
+
+  @IsString()
+  @Length(1, 160)
+  includeText!: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 160)
+  excludeText?: string;
+
+  @IsUUID()
+  districtId!: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(-1000)
+  @Max(1000)
+  priority = 100;
+
+  @IsOptional()
+  @Transform(booleanValue)
+  @IsBoolean()
+  enabled = true;
+}
+
+export class PersonnelAccountBatchPreviewDto {
+  @IsOptional()
+  @IsString()
+  @Length(1, 240)
+  search?: string;
+}
+
+export class PersonnelAccountBatchItemQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page = 1;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  pageSize = 50;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
 }
