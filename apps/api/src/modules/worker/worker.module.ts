@@ -3,6 +3,7 @@ import { ConfigModule } from "@nestjs/config";
 import { DatabaseModule } from "../../common/database.module";
 import { validateEnvironment } from "../../common/config";
 import { AudioModule } from "../audio/audio.module";
+import { AdminModule } from "../admin/admin.module";
 import { WorkflowModule } from "../workflow/workflow.module";
 import { JobWorkerService } from "./job-worker.service";
 
@@ -10,6 +11,7 @@ import { JobWorkerService } from "./job-worker.service";
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnvironment }),
     DatabaseModule,
+    AdminModule,
     WorkflowModule,
     AudioModule,
   ],

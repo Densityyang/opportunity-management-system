@@ -33,7 +33,49 @@ const districts = [
   ["510131", "蒲江", 19],
   ["510113", "青白江", 20],
   ["510181", "都江堰", 21],
+  ["TF_XQ", "天府新区", 22],
+  ["510112", "龙泉驿", 23],
 ] as const;
+
+const mappingRules: Array<{
+  name: string;
+  includeText: string;
+  excludeText?: string;
+  priority: number;
+  districtCode: string;
+}> = [
+  { name: "金牛关键词", includeText: "金牛", priority: 100, districtCode: "510106" },
+  { name: "成华关键词", includeText: "成华", priority: 100, districtCode: "510108" },
+  { name: "青羊关键词", includeText: "青羊", priority: 100, districtCode: "510105" },
+  { name: "锦江关键词", includeText: "锦江", priority: 100, districtCode: "510104" },
+  { name: "武侯关键词", includeText: "武侯", priority: 100, districtCode: "510107" },
+  { name: "高新南关键词", includeText: "高新南", priority: 100, districtCode: "GX_NAN" },
+  { name: "高新西关键词", includeText: "高新西", priority: 100, districtCode: "GX_XI" },
+  { name: "东部新区关键词", includeText: "东部新区", priority: 100, districtCode: "DB_XQ" },
+  { name: "大邑关键词", includeText: "大邑", priority: 100, districtCode: "510129" },
+  { name: "简阳关键词", includeText: "简阳", priority: 100, districtCode: "510185" },
+  { name: "金堂关键词", includeText: "金堂", priority: 100, districtCode: "510121" },
+  { name: "新都关键词", includeText: "新都", priority: 100, districtCode: "510114" },
+  { name: "温江关键词", includeText: "温江", priority: 100, districtCode: "510115" },
+  { name: "郫都关键词", includeText: "郫都", priority: 100, districtCode: "510117" },
+  { name: "郫县兼容关键词", includeText: "郫县", priority: 100, districtCode: "510117" },
+  { name: "彭州关键词", includeText: "彭州", priority: 100, districtCode: "510182" },
+  { name: "崇州关键词", includeText: "崇州", priority: 100, districtCode: "510184" },
+  { name: "新津关键词", includeText: "新津", priority: 100, districtCode: "510118" },
+  { name: "邛崃关键词", includeText: "邛崃", priority: 100, districtCode: "510183" },
+  { name: "蒲江关键词", includeText: "蒲江", priority: 100, districtCode: "510131" },
+  { name: "青白江关键词", includeText: "青白江", priority: 100, districtCode: "510113" },
+  { name: "都江堰关键词", includeText: "都江堰", priority: 100, districtCode: "510181" },
+  { name: "天府新区关键词", includeText: "天府新区", priority: 100, districtCode: "TF_XQ" },
+  { name: "龙泉驿关键词", includeText: "龙泉驿", priority: 200, districtCode: "510112" },
+];
+mappingRules.push({
+  name: "市公司兜底关键词",
+  includeText: "四川分公司/成都分公司/",
+  excludeText: "支撑服务中心",
+  priority: 10,
+  districtCode: "510106",
+});
 
 function readKey(name: string): Buffer {
   const value = process.env[name];
@@ -79,14 +121,44 @@ async function main(): Promise<void> {
     where: { code: { notIn: districts.map(([code]) => code) } },
     data: { enabled: false, sortOrder: 999 },
   });
-  for (const [code, name, sortOrder] of [
-    ["510112", "龙泉驿", 901],
-    ["510116", "双流", 902],
-  ] as const) {
+  for (const [code, name, sortOrder] of [["510116", "双流", 902]] as const) {
     await prisma.district.updateMany({
       where: { code },
       data: { name, sortOrder, enabled: false },
     });
+  }
+
+  for (const rule of mappingRules) {
+    const district = await prisma.district.findUniqueOrThrow({
+      where: { code: rule.districtCode },
+    });
+    const existing = await prisma.personnelDistrictRule.findFirst({
+      where: {
+        includeText: rule.includeText,
+        excludeText: rule.excludeText ?? null,
+        districtId: district.id,
+      },
+    });
+    if (existing)
+      await prisma.personnelDistrictRule.update({
+        where: { id: existing.id },
+        data: {
+          name: rule.name,
+          priority: rule.priority,
+          enabled: true,
+        },
+      });
+    else
+      await prisma.personnelDistrictRule.create({
+        data: {
+          name: rule.name,
+          includeText: rule.includeText,
+          excludeText: rule.excludeText ?? null,
+          priority: rule.priority,
+          enabled: true,
+          districtId: district.id,
+        },
+      });
   }
 
   const phone = process.env.BOOTSTRAP_ADMIN_PHONE;

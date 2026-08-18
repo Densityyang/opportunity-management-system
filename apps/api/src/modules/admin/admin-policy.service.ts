@@ -66,6 +66,8 @@ export class AdministrationPolicyService {
       canManageDistricts: system,
       canViewPersonnel: system || senior,
       canImportPersonnel: system,
+      canBatchProvisionPersonnel: system,
+      canManagePersonnelDistrictRules: system,
       canManagePositions: system || senior,
       canManageRetention: system,
       canViewMunicipal: senior,
@@ -221,6 +223,11 @@ export class AdministrationPolicyService {
   assertCanImportPersonnel(identity: AuthIdentity): void {
     if (this.adminGrant(identity).role !== RoleCode.SYSTEM_ADMIN)
       throw forbidden("仅系统管理员可上传并同步人员表");
+  }
+
+  assertCanBatchProvisionPersonnel(identity: AuthIdentity): void {
+    if (this.adminGrant(identity).role !== RoleCode.SYSTEM_ADMIN)
+      throw forbidden("仅系统管理员可批量开通一线上报人账号");
   }
 
   assertCanConfigureTemplate(identity: AuthIdentity, roles: RoleCode[]): void {

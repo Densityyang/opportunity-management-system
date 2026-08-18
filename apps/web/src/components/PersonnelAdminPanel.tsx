@@ -33,6 +33,7 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
+import { PersonnelAccountBatchPanel } from "./PersonnelAccountBatchPanel";
 import { roleLabels } from "./labels";
 
 interface Props {
@@ -528,6 +529,12 @@ export function PersonnelAdminPanel({ capabilities, districts }: Props) {
           />
         </Space>
       </Card>
+
+      <PersonnelAccountBatchPanel
+        capabilities={capabilities}
+        districts={districts}
+        search={search}
+      />
 
       {capabilities.canManagePositions && (
         <Card

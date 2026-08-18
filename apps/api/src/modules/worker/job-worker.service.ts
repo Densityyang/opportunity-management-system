@@ -8,6 +8,7 @@ import { PgBoss } from "pg-boss";
 import { PrismaService } from "../../common/prisma.service";
 import type { Prisma } from "../../generated/prisma/client";
 import { AudioService } from "../audio/audio.service";
+import { PersonnelBatchService } from "../admin/personnel-batch.service";
 import { WorkflowService } from "../workflow/workflow.service";
 
 interface SlaJobData {
@@ -34,6 +35,7 @@ export class JobWorkerService implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly workflow: WorkflowService,
     private readonly audio: AudioService,
+    private readonly personnelBatch: PersonnelBatchService,
   ) {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) throw new Error("DATABASE_URL is required");
@@ -43,7 +45,12 @@ export class JobWorkerService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit(): Promise<void> {
     await this.boss.start();
-    for (const queue of ["sla-reminder", "sla-overdue", "pause-resume"])
+    for (const queue of [
+      "sla-reminder",
+      "sla-overdue",
+      "pause-resume",
+      "personnel-account-batch",
+    ])
       await this.boss.createQueue(queue);
     await this.boss.work<SlaJobData>("sla-reminder", async ([job]) => {
       if (!job) return;
@@ -60,6 +67,13 @@ export class JobWorkerService implements OnModuleInit, OnModuleDestroy {
         job.data.expectedVersion,
       );
     });
+    await this.boss.work<{ batchId: string }>(
+      "personnel-account-batch",
+      async ([job]) => {
+        if (!job) return;
+        await this.personnelBatch.processBatch(job.data.batchId);
+      },
+    );
     await this.pumpOutbox();
     await this.audio.deleteExpired();
     this.outboxTimer = setInterval(() => void this.pumpOutbox(), 5_000);
@@ -124,6 +138,17 @@ export class JobWorkerService implements OnModuleInit, OnModuleDestroy {
               {
                 startAfter: new Date(String(payload.resumeAt)),
                 singletonKey: `${payload.opportunityId}:${payload.expectedVersion}`,
+                retryLimit: 5,
+                retryBackoff: true,
+              },
+            );
+          } else if (event.type === "PERSONNEL_ACCOUNT_BATCH_REQUESTED") {
+            const batchId = String(payload.batchId);
+            await this.boss.send(
+              "personnel-account-batch",
+              { batchId },
+              {
+                singletonKey: `personnel-account-batch:${batchId}`,
                 retryLimit: 5,
                 retryBackoff: true,
               },

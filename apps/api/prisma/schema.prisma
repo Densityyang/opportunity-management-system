@@ -89,6 +89,27 @@ enum PersonnelSourceProfile {
   CONTACT_ONLY
 }
 
+enum PersonnelAccountBatchStatus {
+  PREVIEWED
+  QUEUED
+  RUNNING
+  COMPLETED
+  PARTIAL
+  FAILED
+  EXPIRED
+}
+
+enum PersonnelAccountBatchItemStatus {
+  ELIGIBLE
+  CREATED
+  SKIPPED_EXISTING
+  SKIPPED_INACTIVE
+  SKIPPED_NO_PHONE
+  SKIPPED_UNMAPPED
+  SKIPPED_AMBIGUOUS
+  FAILED
+}
+
 model User {
   id                 String              @id @default(uuid()) @db.Uuid
   phoneCiphertext    String              @map("phone_ciphertext")
@@ -112,6 +133,7 @@ model User {
   personnelId        String?             @unique @map("personnel_id") @db.Uuid
   personnel          Personnel?          @relation(fields: [personnelId], references: [id], onDelete: SetNull)
   personnelImports   PersonnelImport[]   @relation("PersonnelImportActor")
+  personnelAccountBatches PersonnelAccountBatch[] @relation("PersonnelAccountBatchActor")
 
   @@map("users")
 }
@@ -164,6 +186,7 @@ model Personnel {
   createdAt                   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
   user                        User?
+  accountBatchItems           PersonnelAccountBatchItem[]
 
   @@index([name])
   @@index([active, updatedAt(sort: Desc)])
@@ -218,6 +241,71 @@ model PersonnelImport {
   @@map("personnel_imports")
 }
 
+model PersonnelDistrictRule {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @db.VarChar(120)
+  includeText String    @map("include_text") @db.VarChar(160)
+  excludeText String?   @map("exclude_text") @db.VarChar(160)
+  priority    Int       @default(100)
+  enabled     Boolean   @default(true)
+  districtId  String    @map("district_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  district    District  @relation(fields: [districtId], references: [id], onDelete: Restrict)
+  batchItems  PersonnelAccountBatchItem[]
+
+  @@index([enabled, priority])
+  @@map("personnel_district_rules")
+}
+
+model PersonnelAccountBatch {
+  id                    String                       @id @default(uuid()) @db.Uuid
+  search                String?                      @db.VarChar(240)
+  status                PersonnelAccountBatchStatus  @default(PREVIEWED)
+  mappingFingerprint    String                       @map("mapping_fingerprint") @db.VarChar(128)
+  totalRows             Int                          @map("total_rows")
+  eligibleRows          Int                          @map("eligible_rows")
+  createdRows           Int                          @default(0) @map("created_rows")
+  skippedExistingRows   Int                          @default(0) @map("skipped_existing_rows")
+  skippedInactiveRows   Int                          @default(0) @map("skipped_inactive_rows")
+  skippedNoPhoneRows    Int                          @default(0) @map("skipped_no_phone_rows")
+  skippedUnmappedRows   Int                          @default(0) @map("skipped_unmapped_rows")
+  skippedAmbiguousRows  Int                          @default(0) @map("skipped_ambiguous_rows")
+  failedRows            Int                          @default(0) @map("failed_rows")
+  actorUserId           String                       @map("actor_user_id") @db.Uuid
+  createdAt             DateTime                     @default(now()) @map("created_at") @db.Timestamptz(3)
+  startedAt             DateTime?                    @map("started_at") @db.Timestamptz(3)
+  completedAt           DateTime?                    @map("completed_at") @db.Timestamptz(3)
+  expiresAt             DateTime                     @map("expires_at") @db.Timestamptz(3)
+  actor                 User                         @relation("PersonnelAccountBatchActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  items                 PersonnelAccountBatchItem[]
+
+  @@index([actorUserId, createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+  @@map("personnel_account_batches")
+}
+
+model PersonnelAccountBatchItem {
+  id          String                           @id @default(uuid()) @db.Uuid
+  batchId     String                           @map("batch_id") @db.Uuid
+  personnelId String                           @map("personnel_id") @db.Uuid
+  districtId  String?                          @map("district_id") @db.Uuid
+  ruleId      String?                          @map("rule_id") @db.Uuid
+  status      PersonnelAccountBatchItemStatus  @default(ELIGIBLE)
+  reason      String?                          @db.VarChar(500)
+  createdAt   DateTime                         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime                         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  batch       PersonnelAccountBatch            @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  personnel   Personnel                        @relation(fields: [personnelId], references: [id], onDelete: Restrict)
+  district    District?                        @relation(fields: [districtId], references: [id], onDelete: Restrict)
+  rule        PersonnelDistrictRule?           @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+
+  @@unique([batchId, personnelId])
+  @@index([batchId, status])
+  @@index([personnelId, status])
+  @@map("personnel_account_batch_items")
+}
+
 model Session {
   id         String   @id @default(uuid()) @db.Uuid
   userId     String   @map("user_id") @db.Uuid
@@ -244,6 +332,8 @@ model District {
   updatedAt  DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
   grants     RoleGrant[]
   opportunities Opportunity[]
+  personnelDistrictRules PersonnelDistrictRule[]
+  personnelAccountBatchItems PersonnelAccountBatchItem[]
 
   @@map("districts")
 }
