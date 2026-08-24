@@ -30,7 +30,7 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, download } from "../api/client";
+import { api, download, randomUuid } from "../api/client";
 
 type Props = {
   capabilities: AdminCapabilities;
@@ -73,6 +73,7 @@ export function PersonnelAccountBatchPanel({
   const [detail, setDetail] = useState<PersonnelAccountBatchView | null>(null);
   const [items, setItems] = useState<PersonnelAccountBatchItemView[]>([]);
   const [itemsTotal, setItemsTotal] = useState(0);
+  const [itemsPage, setItemsPage] = useState(1);
   const [itemStatus, setItemStatus] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
   const [ruleModalOpen, setRuleModalOpen] = useState(false);
@@ -102,6 +103,7 @@ export function PersonnelAccountBatchPanel({
   };
 
   useEffect(() => {
+    if (!capabilities.canBatchProvisionPersonnel) return;
     void loadHistory();
   }, [
     capabilities.canBatchProvisionPersonnel,
@@ -162,7 +164,7 @@ export function PersonnelAccountBatchPanel({
         `/admin/personnel/account-batches/${preview.id}/execute`,
         {
           method: "POST",
-          headers: { "Idempotency-Key": crypto.randomUUID() },
+          headers: { "Idempotency-Key": randomUuid() },
         },
       );
       setPreview(null);
@@ -184,11 +186,16 @@ export function PersonnelAccountBatchPanel({
   const openItems = async (
     batch: PersonnelAccountBatchView,
     status?: string,
+    page = 1,
   ): Promise<void> => {
     setDetail(batch);
     setItemStatus(status);
+    setItemsPage(page);
     try {
-      const params = new URLSearchParams({ page: "1", pageSize: "100" });
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: "100",
+      });
       if (status) params.set("status", status);
       const result = await api<{
         items: PersonnelAccountBatchItemView[];
@@ -549,9 +556,13 @@ export function PersonnelAccountBatchPanel({
               columns={itemColumns}
               dataSource={items}
               pagination={{
+                current: itemsPage,
                 pageSize: 100,
                 total: itemsTotal,
                 showSizeChanger: false,
+                onChange: (page) => {
+                  if (detail) void openItems(detail, itemStatus, page);
+                },
               }}
               scroll={{ x: 980 }}
             />

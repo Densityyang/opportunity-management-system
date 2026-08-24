@@ -13,6 +13,30 @@ export class ApiError extends Error {
 const API_BASE = "/api/v1";
 const ACTIVE_GRANT_KEY = "oms.activeGrantId";
 
+/**
+ * RFC 4122 v4 UUID.
+ * `crypto.randomUUID()` only exists in secure contexts (https/localhost),
+ * which breaks deployments served over plain http + IP. Fall back to
+ * `crypto.getRandomValues()`, which is available in all contexts.
+ */
+export function randomUuid(): string {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  // Byte 6 keeps its low nibble (version 4), byte 8 its low two bits (variant).
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 export function getActiveGrantId(): string | null {
   return localStorage.getItem(ACTIVE_GRANT_KEY);
 }
@@ -69,7 +93,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 export async function transition<T>(path: string, body: unknown): Promise<T> {
   return api<T>(path, {
     method: "POST",
-    headers: { "Idempotency-Key": crypto.randomUUID() },
+    headers: { "Idempotency-Key": randomUuid() },
     body: JSON.stringify(body),
   });
 }
