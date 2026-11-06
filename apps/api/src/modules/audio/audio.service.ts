@@ -18,16 +18,10 @@ import type { AuthIdentity } from "../../common/auth.types";
 import { forbidden, notFound } from "../../common/http-error";
 import { PrismaService } from "../../common/prisma.service";
 import { OpportunityAccessService } from "../opportunities/opportunity-access.service";
+import { hasValidAudioMagic, normalizeAudioMimeType } from "./audio-format";
 
 const MAX_AUDIO_BYTES = 5 * 1024 * 1024;
 const MAX_AUDIO_DURATION_MS = 30_000;
-const SUPPORTED_MIME = new Set([
-  "audio/webm",
-  "audio/mp4",
-  "audio/m4a",
-  "audio/x-m4a",
-]);
-
 @Injectable()
 export class AudioService {
   private readonly logger = new Logger(AudioService.name);
@@ -56,20 +50,33 @@ export class AudioService {
         message: "录音文件不能超过 5 MB",
         errorCode: "AUDIO_TOO_LARGE",
       });
-    const mimeType = file.mimetype.toLowerCase().split(";")[0]!;
-    if (
-      !SUPPORTED_MIME.has(mimeType) ||
-      !this.validMagic(file.buffer, mimeType)
-    ) {
+    const mimeType = normalizeAudioMimeType(file.mimetype, file.originalname);
+    if (!mimeType || !hasValidAudioMagic(file.buffer, mimeType)) {
       throw new BadRequestException({
-        message: "仅支持浏览器生成的 WebM 或 MP4/M4A 录音",
+        message:
+          "录音格式不受支持，请使用 WebM、MP4/M4A、3GP、AAC、MP3、Ogg 或 WAV 音频",
         errorCode: "UNSUPPORTED_AUDIO",
       });
     }
-    const metadata = await parseBuffer(file.buffer, {
-      mimeType,
-      size: file.size,
-    });
+    let metadata;
+    try {
+      metadata = await parseBuffer(file.buffer, {
+        mimeType,
+        size: file.size,
+        path: mimeType === "audio/3gpp2" ? "recording.3gp" : file.originalname,
+      });
+    } catch {
+      throw new BadRequestException({
+        message: "无法读取该录音，请使用手机系统录音重新录制后重试",
+        errorCode: "AUDIO_UNREADABLE",
+      });
+    }
+    if (metadata.format.hasAudio === false) {
+      throw new BadRequestException({
+        message: "所选文件不包含可播放的音频",
+        errorCode: "AUDIO_TRACK_REQUIRED",
+      });
+    }
     const durationMs = Math.ceil((metadata.format.duration ?? 0) * 1000);
     if (!durationMs || durationMs > MAX_AUDIO_DURATION_MS + 500) {
       throw new BadRequestException({
@@ -244,16 +251,6 @@ export class AudioService {
       where: { id: row.id },
       data: { status: "DELETED", deletedAt: row.deletedAt ?? new Date() },
     });
-  }
-
-  private validMagic(buffer: Buffer, mimeType: string): boolean {
-    if (mimeType === "audio/webm")
-      return buffer
-        .subarray(0, 4)
-        .equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
-    return (
-      buffer.length >= 12 && buffer.subarray(4, 8).toString("ascii") === "ftyp"
-    );
   }
 
   private safePath(storageKey: string): string {

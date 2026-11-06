@@ -25,6 +25,7 @@ import {
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
+import { getAudioUploadFileName } from "../audio-file";
 import { useSession } from "../auth/session";
 import { AudioRecorder } from "../components/AudioRecorder";
 
@@ -91,11 +92,7 @@ export function ReportPage() {
           });
       if (audio) {
         const formData = new FormData();
-        const extension =
-          audio.type.includes("mp4") || audio.type.includes("m4a")
-            ? "m4a"
-            : "webm";
-        formData.append("audio", audio, `recording.${extension}`);
+        formData.append("audio", audio, getAudioUploadFileName(audio));
         try {
           await api(`/opportunities/${item.id}/audio`, {
             method: "POST",

@@ -32,6 +32,7 @@ import dayjs, { type Dayjs } from "dayjs";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, transition } from "../api/client";
+import { getAudioUploadFileName } from "../audio-file";
 import { useSession } from "../auth/session";
 import { AudioRecorder } from "../components/AudioRecorder";
 import { ProtectedAudio } from "../components/ProtectedAudio";
@@ -205,11 +206,7 @@ export function OpportunityDetailPage() {
   async function uploadAudio(): Promise<void> {
     if (!newAudio) return;
     const formData = new FormData();
-    formData.append(
-      "audio",
-      newAudio,
-      newAudio.type.includes("mp4") ? "recording.m4a" : "recording.webm",
-    );
+    formData.append("audio", newAudio, getAudioUploadFileName(newAudio));
     try {
       await api(`/opportunities/${opportunityId}/audio`, {
         method: "POST",
